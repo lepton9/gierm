@@ -1,8 +1,10 @@
 mod api;
 mod git;
 
-fn main() {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Fetching data..");
-    // let r = api::fetch_data("https://api.github.com/users/lepton9");
+    let res = api::fetch_data("https://api.github.com/users/lepton9").await?;
     // println!("{:?}", r);
+    Ok(())
 }
