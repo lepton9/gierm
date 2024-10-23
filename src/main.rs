@@ -8,8 +8,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let user = git::User::new("lepton9".to_string(), gh_access_token.to_string());
 
     println!("Fetching data..");
-    // let res = api::fetch_data("https://api.github.com/users/lepton9").await?;
-    // let res = api::fetch_data("https://api.github.com/repos/lepton9/lim/actions/caches").await?;
+
+    // api::fetch_user(&user).await;
+    // api::fetch_repos(&user).await;
+
     let rateLimit = api::fetch_data("https://api.github.com/rate_limit", &user).await;
     match rateLimit {
         Ok(v) => println!("Rate remaining: {}", v["rate"]["remaining"]),

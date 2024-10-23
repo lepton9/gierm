@@ -1,5 +1,3 @@
-// use base64::{engine::general_purpose, Engine as _};
-
 pub struct User {
     pub username: String,
     password: String,
@@ -17,7 +15,6 @@ impl User {
 
     pub fn get_token(&self) -> String {
         return self.password.clone();
-        // return general_purpose::STANDARD.encode(&format!("{}:{}", self.username, self.password));
     }
 }
 
