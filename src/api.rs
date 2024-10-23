@@ -1,3 +1,5 @@
+use std::error::Error;
+
 use crate::git;
 use reqwest;
 
@@ -8,11 +10,23 @@ pub fn fetch_user(user: git::User) {
 }
 
 pub fn fetch_data(url: &str) -> Result<(), reqwest::Error> {
-    let res = reqwest::blocking::get(url)?;
-    println!("status = {:?}", res.status());
-    let body: serde_json::Value = res.json()?;
-    println!("body = {:?}", body);
-
+    match reqwest::blocking::get(url) {
+        Ok(res) => {
+            // let body: serde_json::Value = res.json()?;
+            let text = res.text()?;
+            let body: Result<serde_json::Value, serde_json::Error> = serde_json::from_str(&text);
+            match body {
+                Ok(v) => {
+                    println!("Data: {:?}", v);
+                }
+                Err(e) => {
+                    println!("Error JSON: {:?}", e);
+                }
+            }
+        }
+        Err(err) => {
+            println!("Error req: {:?}", err);
+        }
+    }
     Ok(())
 }
-
