@@ -1,4 +1,5 @@
 /debug
 /target
 
+.env
 Cargo.lock
