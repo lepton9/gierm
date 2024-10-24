@@ -1,4 +1,6 @@
-use crate::git;
+use std::env::args;
+
+use crate::git::{self, Commit};
 use reqwest::{self, header::HeaderMap};
 
 const API_URL: &str = "https://api.github.com";
@@ -33,7 +35,18 @@ pub async fn fetch_repo_commits(user: &git::User, repo_name: String) {
     let res = fetch_data(&url, &user).await;
     match res {
         Ok(v) => {
-            println!("Commits: {}", v)
+            if let serde_json::Value::Array(commits) = v {
+                for (i, c) in commits.iter().enumerate() {
+                    let commit: git::Commit = git::Commit::new(
+                        c["commit"]["message"].to_string().replace("\"", ""),
+                        c["sha"].to_string().replace("\"", ""),
+                        c["committer"]["login"].to_string().replace("\"", ""),
+                        c["commit"]["author"]["date"].to_string().replace("\"", ""),
+                    );
+                    println!("Commit: {:?}\n", commit)
+                }
+            }
+            // println!("Commits: {}", v)
         }
         Err(e) => println!("Error: {:?}", e),
     }
