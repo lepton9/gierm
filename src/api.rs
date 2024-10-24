@@ -20,8 +20,20 @@ pub async fn fetch_repos(user: &git::User) {
     let res = fetch_data(&url, &user).await;
     match res {
         Ok(v) => {
-            // println!("Repos: {}", v)
-            println!("{}: {}", v[0]["name"], v[0]);
+            if let serde_json::Value::Array(repos) = &v {
+                for (i, r) in repos.iter().enumerate() {
+                    let repo: git::Repo = git::Repo::new(
+                        r["owner"]["login"].to_string().replace("\"", ""),
+                        r["name"].to_string().replace("\"", ""),
+                        r["description"].to_string().replace("\"", ""),
+                        r["language"].to_string().replace("\"", ""),
+                    );
+                    println!("{:?}", repo);
+                    // TODO:
+                    // user.repos.push(repo);
+                }
+            }
+            // println!("{}: {}", v[0]["name"], v[0]);
         }
         Err(e) => println!("Error: {:?}", e),
     }

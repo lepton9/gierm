@@ -10,13 +10,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Fetching data..");
 
     // api::fetch_user(&user).await;
-    // api::fetch_repos(&user).await;
-    let commits: Vec<git::Commit> = api::fetch_repo_commits(&user, "gierm".to_string()).await;
-    for commit in commits {
-        println!("{:?}", commit);
-        api::fetch_commit_info(&user, "gierm".to_string(), &commit).await;
-    }
+    api::fetch_repos(&user).await;
+    // let commits: Vec<git::Commit> = api::fetch_repo_commits(&user, "gierm".to_string()).await;
+    // for commit in commits {
+    //     println!("{:?}", commit);
+    //     api::fetch_commit_info(&user, "gierm".to_string(), &commit).await;
+    // }
 
+    // TODO: in User struct and reduce when making a request
     let rateLimit = api::fetch_data("https://api.github.com/rate_limit", &user).await;
     match rateLimit {
         Ok(v) => println!("Rate remaining: {}", v["rate"]["remaining"]),

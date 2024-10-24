@@ -24,10 +24,33 @@ impl User {
     }
 }
 
+#[derive(Debug)]
 pub struct Repo {
-    user: User,
+    user: String,
     name: String,
+    description: String,
+    language: String,
     commits: Vec<Commit>,
+}
+
+impl Repo {
+    pub fn new(user: String, name: String, description: String, language: String) -> Self {
+        Self {
+            user,
+            name,
+            description,
+            language,
+            commits: Vec::new(),
+        }
+    }
+}
+
+pub fn get_clone_url(user: String, repo: String, ssh: bool) -> String {
+    if ssh {
+        return format!("git@github.com:{}/{}.git", user, repo);
+    } else {
+        return format!("https://github.com/{}/{}.git", user, repo);
+    }
 }
 
 // TODO: tree, files modified
