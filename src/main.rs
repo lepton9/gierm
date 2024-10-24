@@ -11,6 +11,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // api::fetch_user(&user).await;
     // api::fetch_repos(&user).await;
+    api::fetch_repo_commits(&user, "gierm".to_string()).await;
 
     let rateLimit = api::fetch_data("https://api.github.com/rate_limit", &user).await;
     match rateLimit {

@@ -1,6 +1,7 @@
 pub struct User {
     pub username: String,
     password: String,
+    email: String,
     pub repos: Vec<Repo>,
 }
 
@@ -9,6 +10,7 @@ impl User {
         Self {
             username,
             password,
+            email: "".to_string(), // TODO: get email
             repos: Vec::new(),
         }
     }
@@ -24,6 +26,11 @@ pub struct Repo {
     commits: Commit,
 }
 
+// TODO: tree, files modified
 pub struct Commit {
-    message: String,
+    pub message: String,
+    pub date: String, // TODO: date
+    pub url: String,
+    pub sha: String,
+    pub commiter: String, // Username
 }

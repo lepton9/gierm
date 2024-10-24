@@ -29,11 +29,25 @@ pub async fn fetch_repos(user: &git::User) {
 
 // TODO: return a vec of commit structs
 pub async fn fetch_repo_commits(user: &git::User, repo_name: String) {
-    let url = format!("{}/repos/{}/{}", API_URL, user.username, repo_name);
+    let url = format!("{}/repos/{}/{}/commits", API_URL, user.username, repo_name);
     let res = fetch_data(&url, &user).await;
     match res {
         Ok(v) => {
             println!("Commits: {}", v)
+        }
+        Err(e) => println!("Error: {:?}", e),
+    }
+}
+
+pub async fn fetch_commitFilesChanged(user: &git::User, repo_name: String, commit: &git::Commit) {
+    let url = format!(
+        "{}/repos/{}/{}/commits/{}",
+        API_URL, user.username, repo_name, commit.sha
+    );
+    let res = fetch_data(&url, &user).await;
+    match res {
+        Ok(v) => {
+            println!("Commit: {}", v)
         }
         Err(e) => println!("Error: {:?}", e),
     }
