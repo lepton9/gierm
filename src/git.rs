@@ -96,3 +96,14 @@ pub struct File {
     pub additions: i32,
     pub deletions: i32,
 }
+
+impl File {
+    pub fn new(name: String, sha: String, additions: i32, deletions: i32) -> Self {
+        Self {
+            name,
+            sha,
+            additions,
+            deletions,
+        }
+    }
+}
