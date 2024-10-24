@@ -11,7 +11,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // api::fetch_user(&user).await;
     // api::fetch_repos(&user).await;
-    api::fetch_repo_commits(&user, "gierm".to_string()).await;
+    let commits: Vec<git::Commit> = api::fetch_repo_commits(&user, "gierm".to_string()).await;
+    for commit in commits {
+        println!("{:?}", commit);
+        api::fetch_commit_info(&user, "gierm".to_string(), &commit).await;
+    }
 
     let rateLimit = api::fetch_data("https://api.github.com/rate_limit", &user).await;
     match rateLimit {

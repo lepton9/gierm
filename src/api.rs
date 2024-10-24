@@ -30,11 +30,12 @@ pub async fn fetch_repos(user: &git::User) {
 }
 
 // TODO: return a vec of commit structs
-pub async fn fetch_repo_commits(user: &git::User, repo_name: String) {
+pub async fn fetch_repo_commits(user: &git::User, repo_name: String) -> Vec<Commit> {
     let url = format!("{}/repos/{}/{}/commits", API_URL, user.username, repo_name);
     let res = fetch_data(&url, &user).await;
     match res {
         Ok(v) => {
+            let mut repo_commits: Vec<Commit> = Vec::new();
             if let serde_json::Value::Array(commits) = v {
                 for (i, c) in commits.iter().enumerate() {
                     let commit: git::Commit = git::Commit::new(
@@ -43,16 +44,25 @@ pub async fn fetch_repo_commits(user: &git::User, repo_name: String) {
                         c["committer"]["login"].to_string().replace("\"", ""),
                         c["commit"]["author"]["date"].to_string().replace("\"", ""),
                     );
-                    println!("Commit: {:?}\n", commit)
+                    repo_commits.push(commit);
+                    // println!("Commit: {:?}\n", c)
                 }
             }
+            return repo_commits;
             // println!("Commits: {}", v)
         }
-        Err(e) => println!("Error: {:?}", e),
+        Err(e) => {
+            println!("Error: {:?}", e);
+            return Vec::new();
+        }
     }
 }
 
-pub async fn fetch_commitFilesChanged(user: &git::User, repo_name: String, commit: &git::Commit) {
+pub async fn fetch_commit_info(
+    user: &git::User,
+    repo_name: String,
+    commit: &git::Commit,
+) -> git::CommitInfo {
     let url = format!(
         "{}/repos/{}/{}/commits/{}",
         API_URL, user.username, repo_name, commit.sha
@@ -60,11 +70,35 @@ pub async fn fetch_commitFilesChanged(user: &git::User, repo_name: String, commi
     let res = fetch_data(&url, &user).await;
     match res {
         Ok(v) => {
-            println!("Commit: {}", v)
+            if let serde_json::Value::Object(info) = v {
+                let total = info["stats"]["total"].as_i64().unwrap_or(0) as i32;
+                let additions = info["stats"]["additions"].as_i64().unwrap_or(0) as i32;
+                let deletions = info["stats"]["deletions"].as_i64().unwrap_or(0) as i32;
+                let commit_info = git::CommitInfo::new(total, additions, deletions);
+
+                println!("Info: {:?}", commit_info);
+                return commit_info;
+            }
+            return git::CommitInfo::default();
         }
-        Err(e) => println!("Error: {:?}", e),
+        Err(e) => {
+            println!("Error: {:?}", e);
+            return git::CommitInfo::default();
+        }
     }
 }
+// {
+//   "sha": "0eb809d449546e9597ea6de44fc97a2e4e7be8f4",
+//   "filename": ".gitignore",
+//   "status": "added",
+//   "additions": 4,
+//   "deletions": 0,
+//   "changes": 4,
+//   "blob_url": "https://github.com/lepton9/gierm/blob/9f59e30e89ca4f8f4d898c3d4127fc7f062cb3c9/.gitignore",
+//   "raw_url": "https://github.com/lepton9/gierm/raw/9f59e30e89ca4f8f4d898c3d4127fc7f062cb3c9/.gitignore",
+//   "contents_url": "https://api.github.com/repos/lepton9/gierm/contents/.gitignore?ref=9f59e30e89ca4f8f4d898c3d4127fc7f062cb3c9",
+//   "patch": "@@ -0,0 +1,4 @@\n+/debug\n+/target\n+\n+Cargo.lock"
+// },
 
 // pub async fn fetch_data(url: &str) -> Result<serde_json::Value, reqwest::Error> {
 pub async fn fetch_data(
