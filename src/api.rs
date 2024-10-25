@@ -154,14 +154,13 @@ pub async fn fetch_data(
 ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
     // if !user.fetch() {
     //     println!("Error: Rate limit reached");
-    //     return Err();
+    //     return Err("Rate limit reached".into());
     // }
     let per_page = 100;
     let client = reqwest::Client::new();
-    // let res = client.get(url).headers(headers).send().await?;
 
     let mut fetch_url = url.to_string();
-    let mut data: serde_json::Value = serde_json::Value::Array(Vec::new());
+    let mut data: serde_json::Value = serde_json::Value::Null;
     loop {
         let mut headers = HeaderMap::new();
         headers.insert("User-Agent", "gierm".parse().unwrap());
@@ -188,10 +187,27 @@ pub async fn fetch_data(
                     Ok(v) => {
                         // println!("Data: {:?}", v);
                         // return Ok(v);
-                        if let serde_json::Value::Array(items) = &mut data {
-                            if let serde_json::Value::Array(page_items) = v {
-                                items.extend(page_items);
-                                println!("Length: {:?}", items.len());
+                        match &mut data {
+                            serde_json::Value::Null => {
+                                data = v;
+                            }
+                            serde_json::Value::Array(ref mut items) => {
+                                if let serde_json::Value::Array(page_items) = v {
+                                    items.extend(page_items);
+                                    println!("Length: {:?}", items.len());
+                                }
+                            }
+                            serde_json::Value::Object(ref mut map) => {
+                                if let serde_json::Value::Object(page_object) = v {
+                                    for (k, v) in page_object {
+                                        map.insert(k, v);
+                                    }
+                                } else {
+                                    return Err("Expected an object".into());
+                                }
+                            }
+                            _ => {
+                                return Err("Unexpected data type".into());
                             }
                         }
                     }
