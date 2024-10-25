@@ -15,7 +15,7 @@ impl User {
         Self {
             username,
             password,
-            email: "".to_string(), // TODO: get email
+            email: "".to_string(),
             remaining: 60,
             repos: HashMap::new(),
             // repos: Vec::new(),
@@ -64,7 +64,7 @@ impl Repo {
     }
 }
 
-pub fn get_clone_url(user: String, repo: String, ssh: bool) -> String {
+pub fn get_clone_url(user: &String, repo: &String, ssh: bool) -> String {
     if ssh {
         return format!("git@github.com:{}/{}.git", user, repo);
     } else {

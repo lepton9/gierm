@@ -1,19 +1,28 @@
-use std::collections::HashMap;
-
 use crate::git;
 use reqwest::{self, header::HeaderMap};
+use std::collections::HashMap;
 
 const API_URL: &str = "https://api.github.com";
 
 // TODO: fill the user struct and make a func to fetch other users by username
 pub async fn fetch_user(user: &mut git::User) {
-    let url = format!("{}/users/lepton9", API_URL);
-    // let url = format!("{}/users/{}", API_URL, user.username);
+    let url = format!("{}/users/{}", API_URL, user.username);
     let res = fetch_data(&url, &user).await;
     match res {
         Ok(v) => {
             fetch_rate(user).await;
-            // println!("User: {}", v);
+        }
+        Err(e) => println!("Error: {:?}", e),
+    }
+}
+
+pub async fn search_user(user: &git::User, username: &String) {
+    let url = format!("{}/users/{}", API_URL, username);
+    let res = fetch_data(&url, &user).await;
+    match res {
+        Ok(v) => {
+            let repos: HashMap<String, git::Repo> = fetch_repos(user, username).await;
+            // println!("{:?}", repos);
         }
         Err(e) => println!("Error: {:?}", e),
     }
@@ -30,12 +39,12 @@ pub async fn fetch_rate(user: &mut git::User) {
     }
 }
 
-pub async fn fetch_repos(user: &git::User) -> HashMap<String, git::Repo> {
-    let url = format!("{}/users/{}/repos", API_URL, user.username);
+pub async fn fetch_repos(user: &git::User, username: &String) -> HashMap<String, git::Repo> {
+    let url = format!("{}/users/{}/repos", API_URL, username);
     let res = fetch_data(&url, &user).await;
+    // println!("{:?}\n", res);
     match res {
         Ok(v) => {
-            // let mut all_repos: Vec<git::Repo> = Vec::new();
             let mut all_repos: HashMap<String, git::Repo> = HashMap::new();
             if let serde_json::Value::Array(repos) = &v {
                 for (i, r) in repos.iter().enumerate() {
@@ -45,6 +54,7 @@ pub async fn fetch_repos(user: &git::User) -> HashMap<String, git::Repo> {
                         r["description"].to_string().replace("\"", ""),
                         r["language"].to_string().replace("\"", ""),
                     );
+                    // println!("{:?}", r);
                     all_repos.insert(repo.name.clone(), repo);
                 }
             }
@@ -126,6 +136,18 @@ pub async fn fetch_commit_info(
     }
 }
 
+fn extract_next_url(link_header: &reqwest::header::HeaderValue) -> Option<String> {
+    let link_str = link_header.to_str().ok()?;
+    let next_pattern = r#"<([^>]+)>; rel="next""#;
+
+    let regex = regex::Regex::new(next_pattern).ok()?;
+    if let Some(captures) = regex.captures(link_str) {
+        captures.get(1).map(|m| m.as_str().to_string())
+    } else {
+        None
+    }
+}
+
 pub async fn fetch_data(
     url: &str,
     user: &git::User,
@@ -134,37 +156,64 @@ pub async fn fetch_data(
     //     println!("Error: Rate limit reached");
     //     return Err();
     // }
+    let per_page = 100;
     let client = reqwest::Client::new();
-    let mut headers = HeaderMap::new();
-    headers.insert("User-Agent", "gierm".parse().unwrap());
-    headers.insert("Accept", "application/vnd.github+json".parse().unwrap());
-    headers.insert(
-        "Authorization",
-        format!("Token {}", user.get_token()).parse().unwrap(),
-    );
     // let res = client.get(url).headers(headers).send().await?;
 
-    match client.get(url).headers(headers).send().await {
-        // match reqwest::blocking::get(url) {
-        Ok(r) => {
-            // let body: serde_json::Value = res.json()?;
-            let text = r.text().await?;
-            let body: Result<serde_json::Value, serde_json::Error> = serde_json::from_str(&text);
-            match body {
-                Ok(v) => {
-                    // println!("Data: {:?}", v);
-                    return Ok(v);
+    let mut fetch_url = url.to_string();
+    let mut data: serde_json::Value = serde_json::Value::Array(Vec::new());
+    loop {
+        let mut headers = HeaderMap::new();
+        headers.insert("User-Agent", "gierm".parse().unwrap());
+        headers.insert("Accept", "application/vnd.github+json".parse().unwrap());
+        headers.insert(
+            "Authorization",
+            format!("Token {}", user.get_token()).parse().unwrap(),
+        );
+        println!("GET: {}", fetch_url);
+        let res = client
+            .get(fetch_url)
+            .headers(headers)
+            .query(&[("per_page", &per_page.to_string())])
+            .send()
+            .await;
+        match res {
+            Ok(r) => {
+                // let body: serde_json::Value = res.json()?;
+                let link_header = r.headers().get("link").map(|h| h.to_owned());
+                let text = r.text().await?;
+                let body: Result<serde_json::Value, serde_json::Error> =
+                    serde_json::from_str(&text);
+                match body {
+                    Ok(v) => {
+                        // println!("Data: {:?}", v);
+                        // return Ok(v);
+                        if let serde_json::Value::Array(items) = &mut data {
+                            if let serde_json::Value::Array(page_items) = v {
+                                items.extend(page_items);
+                                println!("Length: {:?}", items.len());
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        // println!("Error JSON: {:?}", e);
+                        return Err(Box::new(e));
+                    }
                 }
-                Err(e) => {
-                    // println!("Error JSON: {:?}", e);
-                    return Err(Box::new(e));
+                if let Some(link_header_value) = link_header {
+                    if let Some(next_url) = extract_next_url(&link_header_value) {
+                        fetch_url = next_url;
+                    } else {
+                        return Ok(data); // No more pages
+                    }
+                } else {
+                    return Ok(data); // No "Link" header, no more pages
                 }
             }
-        }
-        Err(e) => {
-            // println!("Error req: {:?}", e);
-            return Err(Box::new(e));
+            Err(e) => {
+                // println!("Error req: {:?}", e);
+                return Err(Box::new(e));
+            }
         }
     }
-    // Ok(())
 }
