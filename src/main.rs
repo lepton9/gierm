@@ -14,18 +14,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     user.repos = api::fetch_repos(&user, &user.username).await;
 
     let repo_name = "gierm".to_string();
-    let commits: Vec<git::Commit> = api::fetch_repo_commits(&user, repo_name.clone()).await;
+    let repo = api::fetch_repo(&user, &user.username, &repo_name)
+        .await
+        .unwrap();
+    let commits: Vec<git::Commit> = api::fetch_repo_commits(&user, &repo).await;
     if let Some(repo) = user.repos.get_mut(&repo_name) {
         repo.commits = commits;
     }
     // println!("{:?}", user);
 
-    // if let Some(repo) = user.repos.get(&repo_name) {
-    //     for commit in &repo.commits {
-    //         api::fetch_commit_info(&user, user.username.clone(), repo.name.clone(), commit).await;
-    //         println!("{:?}", commit);
-    //     }
-    // }
+    if let Some(repo) = user.repos.get(&repo_name) {
+        for commit in &repo.commits {
+            api::fetch_commit_info(&user, user.username.clone(), repo.name.clone(), commit).await;
+            println!("{:?}", commit);
+        }
+    }
 
     // api::search_user(&user, &"thePrimeagen".to_string()).await;
 

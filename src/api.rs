@@ -66,8 +66,32 @@ pub async fn fetch_repos(user: &git::User, username: &String) -> HashMap<String,
     }
 }
 
-pub async fn fetch_repo_commits(user: &git::User, repo_name: String) -> Vec<git::Commit> {
-    let url = format!("{}/repos/{}/{}/commits", API_URL, user.username, repo_name);
+pub async fn fetch_repo(
+    user: &git::User,
+    username: &String,
+    repo_name: &String,
+) -> Option<git::Repo> {
+    let url = format!("{}/repos/{}/{}", API_URL, username, repo_name);
+    let res = fetch_data(&url, &user).await;
+    match res {
+        Ok(r) => {
+            let repo: git::Repo = git::Repo::new(
+                r["owner"]["login"].to_string().replace("\"", ""),
+                r["name"].to_string().replace("\"", ""),
+                r["description"].to_string().replace("\"", ""),
+                r["language"].to_string().replace("\"", ""),
+            );
+            return Some(repo);
+        }
+        Err(e) => {
+            println!("Error: {:?}", e);
+            return None;
+        }
+    }
+}
+
+pub async fn fetch_repo_commits(user: &git::User, repo: &git::Repo) -> Vec<git::Commit> {
+    let url = format!("{}/repos/{}/{}/commits", API_URL, repo.user, repo.name);
     let res = fetch_data(&url, &user).await;
     match res {
         Ok(v) => {

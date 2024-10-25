@@ -44,7 +44,7 @@ impl User {
 
 #[derive(Debug)]
 pub struct Repo {
-    user: String,
+    pub user: String,
     pub name: String,
     description: String,
     language: String,
