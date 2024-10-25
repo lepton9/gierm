@@ -1,6 +1,3 @@
-use api::search_user;
-use git::get_clone_url;
-
 mod api;
 mod git;
 
@@ -21,14 +18,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(repo) = user.repos.get_mut(&repo_name) {
         repo.commits = commits;
     }
-    println!("{:?}", user);
+    // println!("{:?}", user);
 
-    search_user(&user, &"thePrimeagen".to_string()).await;
-
-    // for commit in commits {
-    //     println!("{:?}", commit);
-    //     api::fetch_commit_info(&user, "gierm".to_string(), &commit).await;
+    // if let Some(repo) = user.repos.get(&repo_name) {
+    //     for commit in &repo.commits {
+    //         api::fetch_commit_info(&user, user.username.clone(), repo.name.clone(), commit).await;
+    //         println!("{:?}", commit);
+    //     }
     // }
+
+    // api::search_user(&user, &"thePrimeagen".to_string()).await;
 
     Ok(())
 }

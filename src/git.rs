@@ -1,4 +1,4 @@
-use chrono::{DateTime, Local, Utc};
+use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 
 #[derive(Debug)]
@@ -18,7 +18,6 @@ impl User {
             email: "".to_string(),
             remaining: 60,
             repos: HashMap::new(),
-            // repos: Vec::new(),
         }
     }
 
@@ -78,7 +77,7 @@ pub struct Commit {
     pub sha: String,
     pub committer: String, // Username
     pub date: DateTime<Utc>,
-    // pub info: CommitInfo,
+    pub info: CommitInfo,
 }
 
 impl Commit {
@@ -99,6 +98,7 @@ impl Commit {
             sha,
             committer,
             date: dt,
+            info: CommitInfo::default(),
         }
     }
 }
