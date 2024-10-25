@@ -1,4 +1,5 @@
 use chrono::{DateTime, Local, Utc};
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct User {
@@ -6,7 +7,7 @@ pub struct User {
     password: String,
     email: String,
     remaining: i32,
-    pub repos: Vec<Repo>,
+    pub repos: HashMap<String, Repo>,
 }
 
 impl User {
@@ -16,7 +17,8 @@ impl User {
             password,
             email: "".to_string(), // TODO: get email
             remaining: 60,
-            repos: Vec::new(),
+            repos: HashMap::new(),
+            // repos: Vec::new(),
         }
     }
 

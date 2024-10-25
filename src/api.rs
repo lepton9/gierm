@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::git;
 use reqwest::{self, header::HeaderMap};
 
@@ -28,13 +30,13 @@ pub async fn fetch_rate(user: &mut git::User) {
     }
 }
 
-// TODO: return vec
-pub async fn fetch_repos(user: &git::User) -> Vec<git::Repo> {
+pub async fn fetch_repos(user: &git::User) -> HashMap<String, git::Repo> {
     let url = format!("{}/users/{}/repos", API_URL, user.username);
     let res = fetch_data(&url, &user).await;
     match res {
         Ok(v) => {
-            let mut all_repos: Vec<git::Repo> = Vec::new();
+            // let mut all_repos: Vec<git::Repo> = Vec::new();
+            let mut all_repos: HashMap<String, git::Repo> = HashMap::new();
             if let serde_json::Value::Array(repos) = &v {
                 for (i, r) in repos.iter().enumerate() {
                     let repo: git::Repo = git::Repo::new(
@@ -43,15 +45,14 @@ pub async fn fetch_repos(user: &git::User) -> Vec<git::Repo> {
                         r["description"].to_string().replace("\"", ""),
                         r["language"].to_string().replace("\"", ""),
                     );
-                    all_repos.push(repo);
-                    // user.repos.push(repo);
+                    all_repos.insert(repo.name.clone(), repo);
                 }
             }
             return all_repos;
         }
         Err(e) => {
             println!("Error: {:?}", e);
-            return Vec::new();
+            return HashMap::new();
         }
     }
 }
@@ -125,7 +126,6 @@ pub async fn fetch_commit_info(
     }
 }
 
-// pub async fn fetch_data(url: &str) -> Result<serde_json::Value, reqwest::Error> {
 pub async fn fetch_data(
     url: &str,
     user: &git::User,

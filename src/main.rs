@@ -12,8 +12,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     api::fetch_user(&mut user).await;
     user.repos = api::fetch_repos(&user).await;
+
+    let repo_name = "gierm".to_string();
+    let commits: Vec<git::Commit> = api::fetch_repo_commits(&user, repo_name.clone()).await;
+    if let Some(repo) = user.repos.get_mut(&repo_name) {
+        repo.commits = commits;
+    }
+
     println!("{:?}", user);
-    let commits: Vec<git::Commit> = api::fetch_repo_commits(&user, "gierm".to_string()).await;
     // for commit in commits {
     //     println!("{:?}", commit);
     //     api::fetch_commit_info(&user, "gierm".to_string(), &commit).await;
