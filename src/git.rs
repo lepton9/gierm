@@ -1,11 +1,11 @@
-use std::str::FromStr;
-
 use chrono::{DateTime, Local, Utc};
 
+#[derive(Debug)]
 pub struct User {
     pub username: String,
     password: String,
     email: String,
+    remaining: i32,
     pub repos: Vec<Repo>,
 }
 
@@ -15,6 +15,7 @@ impl User {
             username,
             password,
             email: "".to_string(), // TODO: get email
+            remaining: 60,
             repos: Vec::new(),
         }
     }
@@ -22,15 +23,31 @@ impl User {
     pub fn get_token(&self) -> String {
         return self.password.clone();
     }
+
+    pub fn set_ratelimit(&mut self, limit: i32) {
+        self.remaining = limit;
+    }
+
+    pub fn rate(&self) -> i32 {
+        return self.remaining;
+    }
+
+    pub fn fetch(&mut self) -> bool {
+        if self.remaining > 0 {
+            self.remaining -= 1;
+            return true;
+        }
+        return false;
+    }
 }
 
 #[derive(Debug)]
 pub struct Repo {
     user: String,
-    name: String,
+    pub name: String,
     description: String,
     language: String,
-    commits: Vec<Commit>,
+    pub commits: Vec<Commit>,
 }
 
 impl Repo {
@@ -53,7 +70,6 @@ pub fn get_clone_url(user: String, repo: String, ssh: bool) -> String {
     }
 }
 
-// TODO: tree, files modified
 #[derive(Debug)]
 pub struct Commit {
     pub message: String,

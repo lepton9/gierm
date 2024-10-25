@@ -4,22 +4,37 @@ use reqwest::{self, header::HeaderMap};
 const API_URL: &str = "https://api.github.com";
 
 // TODO: fill the user struct and make a func to fetch other users by username
-pub async fn fetch_user(user: &git::User) {
-    let url = format!("{}/users/tovialhi", API_URL);
+pub async fn fetch_user(user: &mut git::User) {
+    let url = format!("{}/users/lepton9", API_URL);
     // let url = format!("{}/users/{}", API_URL, user.username);
     let res = fetch_data(&url, &user).await;
     match res {
-        Ok(v) => println!("User: {}", v),
+        Ok(v) => {
+            fetch_rate(user).await;
+            // println!("User: {}", v);
+        }
+        Err(e) => println!("Error: {:?}", e),
+    }
+}
+
+pub async fn fetch_rate(user: &mut git::User) {
+    match fetch_data(&format!("{}/rate_limit", API_URL), &user).await {
+        Ok(v) => {
+            let rate_limit: i32 = v["rate"]["remaining"].as_i64().unwrap_or(0) as i32;
+            user.set_ratelimit(rate_limit);
+            println!("Rate remaining: {}", user.rate());
+        }
         Err(e) => println!("Error: {:?}", e),
     }
 }
 
 // TODO: return vec
-pub async fn fetch_repos(user: &git::User) {
+pub async fn fetch_repos(user: &git::User) -> Vec<git::Repo> {
     let url = format!("{}/users/{}/repos", API_URL, user.username);
     let res = fetch_data(&url, &user).await;
     match res {
         Ok(v) => {
+            let mut all_repos: Vec<git::Repo> = Vec::new();
             if let serde_json::Value::Array(repos) = &v {
                 for (i, r) in repos.iter().enumerate() {
                     let repo: git::Repo = git::Repo::new(
@@ -28,14 +43,16 @@ pub async fn fetch_repos(user: &git::User) {
                         r["description"].to_string().replace("\"", ""),
                         r["language"].to_string().replace("\"", ""),
                     );
-                    println!("{:?}", repo);
-                    // TODO:
+                    all_repos.push(repo);
                     // user.repos.push(repo);
                 }
             }
-            // println!("{}: {}", v[0]["name"], v[0]);
+            return all_repos;
         }
-        Err(e) => println!("Error: {:?}", e),
+        Err(e) => {
+            println!("Error: {:?}", e);
+            return Vec::new();
+        }
     }
 }
 
@@ -113,6 +130,10 @@ pub async fn fetch_data(
     url: &str,
     user: &git::User,
 ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    // if !user.fetch() {
+    //     println!("Error: Rate limit reached");
+    //     return Err();
+    // }
     let client = reqwest::Client::new();
     let mut headers = HeaderMap::new();
     headers.insert("User-Agent", "gierm".parse().unwrap());
