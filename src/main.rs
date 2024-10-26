@@ -9,10 +9,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let username: String = "lepton9".to_string(); // TODO: from env or config
     let mut user: git::User = git::User::new(username, gh_access_token.to_string());
 
-    // println!("Fetching data..");
-
-    // api::fetch_user(&mut user).await;
-    // user.git.repos = api::fetch_repos(&user, &user.git.username).await;
+    println!("Fetching data..");
+    api::fetch_user(&mut user).await;
+    user.git.repos = api::fetch_repos(&user, &user.git.username).await;
 
     // let repo_name = "gierm".to_string();
     // let repo = api::fetch_repo(&user, &user.git.username, &repo_name)
