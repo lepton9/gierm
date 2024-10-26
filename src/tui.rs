@@ -1,3 +1,5 @@
+use std::default;
+
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
     layout::{Constraint, Layout},
@@ -11,10 +13,10 @@ use Constraint::{Fill, Length, Min};
 pub fn run_tui(user: crate::git::User) {
     let mut tui = Tui::new(
         user,
-        0,
         "Username".to_string(),
         "Repo name".to_string(),
         "Status text".to_string(),
+        3,
     );
     tui.run();
 }
@@ -32,6 +34,7 @@ impl<T> StatefulList<T> {
             items,
         }
     }
+
     pub fn next(&mut self) {
         let i = match self.state.selected() {
             Some(i) => {
@@ -45,6 +48,7 @@ impl<T> StatefulList<T> {
         };
         self.state.select(Some(i));
     }
+
     pub fn previous(&mut self) {
         let i = match self.state.selected() {
             Some(i) => {
@@ -66,30 +70,32 @@ impl<T> StatefulList<T> {
 
 struct Tui {
     user: crate::git::User,
-    selected_block: u16,
+    selected_block: i32,
     repo_list: StatefulList<String>,
     search_user: String,
     search_repo: String,
     status_text: String,
+    blocks: i32,
 }
 
 impl Tui {
     pub fn new(
         user: crate::git::User,
-        selected_block: u16,
         search_user: String,
         search_repo: String,
         status_text: String,
+        blocks: i32,
     ) -> Self {
         let repos =
             StatefulList::with_items((&user).git.repos.keys().cloned().collect::<Vec<String>>());
         Self {
             user,
-            selected_block,
+            selected_block: 0,
             repo_list: repos,
             search_user,
             search_repo,
             status_text,
+            blocks,
         }
     }
 
@@ -106,21 +112,33 @@ impl Tui {
         ratatui::restore();
     }
 
+    pub fn next(&mut self) {
+        self.selected_block = (self.selected_block + 1) % self.blocks;
+    }
+
+    pub fn previous(&mut self) {
+        self.selected_block = (self.selected_block + self.blocks - 1) % self.blocks;
+    }
+
     fn handle_events(&mut self) -> std::io::Result<bool> {
         match event::read()? {
             Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
                 KeyCode::Char('q') => return Ok(true),
                 KeyCode::Up => {
-                    //
+                    if self.selected_block == 1 {
+                        self.repo_list.previous();
+                    }
                 }
                 KeyCode::Down => {
-                    //
+                    if self.selected_block == 1 {
+                        self.repo_list.next();
+                    }
                 }
                 KeyCode::Left => {
-                    //
+                    self.previous();
                 }
                 KeyCode::Right => {
-                    //
+                    self.next();
                 }
                 KeyCode::Enter => {
                     //
@@ -159,7 +177,12 @@ impl Tui {
             Block::bordered()
                 .title(self.user.git.username.clone())
                 .border_type(BorderType::Rounded)
-                .border_style(Style::new().blue()),
+                // .border_style(Style::new().blue()),
+                .border_style(if self.selected_block == 0 {
+                    Style::new().blue()
+                } else {
+                    Style::default()
+                }),
             profile_area,
         );
 
@@ -167,21 +190,29 @@ impl Tui {
             .block(
                 Block::bordered()
                     .title("Repos")
-                    .border_type(BorderType::Rounded),
+                    .border_type(BorderType::Rounded)
+                    .border_style(if self.selected_block == 1 {
+                        Style::new().blue()
+                    } else {
+                        Style::default()
+                    }),
             )
             .style(Style::new().white())
-            .highlight_style(Style::new().italic())
+            .highlight_style(Style::new().italic().blue())
             .highlight_symbol(">>")
             .repeat_highlight_symbol(true)
             .direction(ListDirection::TopToBottom);
 
-        // self.repo_list.next();
         frame.render_stateful_widget(&repos_list, repos_area, &mut self.repo_list.state);
 
         let search_block = Block::bordered()
             .title("Search")
             .border_type(BorderType::Rounded)
-            .border_style(Style::new());
+            .border_style(if self.selected_block == 2 {
+                Style::new().blue()
+            } else {
+                Style::default()
+            });
         let user_search_block = Block::bordered()
             .border_type(BorderType::Rounded)
             .title("User")
