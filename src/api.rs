@@ -4,6 +4,7 @@ use std::collections::HashMap;
 const API_URL: &str = "https://api.github.com";
 const PER_PAGE: i32 = 100;
 
+// TODO: fill
 pub async fn fetch_user(user: &mut git::User) {
     let url = format!("{}/users/{}", API_URL, user.username);
     let res = fetch_data(&url, &user).await;
@@ -53,6 +54,8 @@ pub async fn fetch_repos(user: &git::User, username: &String) -> HashMap<String,
                         r["name"].to_string().replace("\"", ""),
                         r["description"].to_string().replace("\"", ""),
                         r["language"].to_string().replace("\"", ""),
+                        r["created_at"].to_string().replace("\"", ""),
+                        r["updated_at"].to_string().replace("\"", ""),
                     );
                     all_repos.insert(repo.name.clone(), repo);
                 }
@@ -80,6 +83,8 @@ pub async fn fetch_repo(
                 r["name"].to_string().replace("\"", ""),
                 r["description"].to_string().replace("\"", ""),
                 r["language"].to_string().replace("\"", ""),
+                r["created_at"].to_string().replace("\"", ""),
+                r["updated_at"].to_string().replace("\"", ""),
             );
             return Some(repo);
         }

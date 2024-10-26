@@ -48,16 +48,32 @@ pub struct Repo {
     pub name: String,
     description: String,
     language: String,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
     pub commits: Vec<Commit>,
 }
 
 impl Repo {
-    pub fn new(user: String, name: String, description: String, language: String) -> Self {
+    pub fn new(
+        user: String,
+        name: String,
+        description: String,
+        language: String,
+        created_at: String,
+        updated_at: String,
+    ) -> Self {
+        let created_result = DateTime::parse_from_rfc3339(&created_at);
+        let updated_result = DateTime::parse_from_rfc3339(&updated_at);
+        let created: DateTime<Utc> = created_result.unwrap_or(DateTime::default()).into();
+        let updated: DateTime<Utc> = updated_result.unwrap_or(DateTime::default()).into();
+
         Self {
             user,
             name,
             description,
             language,
+            created_at: created,
+            updated_at: updated,
             commits: Vec::new(),
         }
     }
@@ -83,16 +99,7 @@ pub struct Commit {
 impl Commit {
     pub fn new(message: String, sha: String, committer: String, date: String) -> Self {
         let dt_result = DateTime::parse_from_rfc3339(&date);
-        let dt;
-        match dt_result {
-            Ok(v) => {
-                dt = v.to_utc();
-            }
-            Err(e) => {
-                dt = Utc::now();
-                println!("Error parse: {:?}", e);
-            }
-        }
+        let dt: DateTime<Utc> = dt_result.unwrap_or(DateTime::default()).into();
         Self {
             message,
             sha,
