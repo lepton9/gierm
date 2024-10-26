@@ -1,10 +1,8 @@
-use std::default;
-
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
     layout::{Constraint, Layout},
     style::{Color, Modifier, Style, Stylize},
-    text::{Line, Span},
+    text::{Line, Span, Text},
     widgets::{Block, BorderType, Borders, List, ListDirection, ListItem, ListState, Paragraph},
     Frame,
 };
@@ -163,28 +161,43 @@ impl Tui {
         let [left_area, right_area] = horizontal.areas(main_area);
 
         let left_vertical =
-            Layout::vertical([Length(3), Min(0), Length(8), Length(status_area_height)]);
+            Layout::vertical([Length(6), Min(0), Length(8), Length(status_area_height)]);
         let [profile_area, repos_area, search_area, status_area] = left_vertical.areas(left_area);
 
         // Selected text highlight
         // Paragraph::new(status_text).block(Block::default())
         //     .bg(ratatui::prelude::Color::LightBlue)
-        //
-        // Selected block style
-        // .border_style(Style::new().blue()),
 
-        frame.render_widget(
-            Block::bordered()
-                .title(self.user.git.username.clone())
-                .border_type(BorderType::Rounded)
-                // .border_style(Style::new().blue()),
-                .border_style(if self.selected_block == 0 {
-                    Style::new().blue()
-                } else {
-                    Style::default()
-                }),
-            profile_area,
-        );
+        let profile_block = Block::bordered()
+            .title(self.user.git.username.clone())
+            .border_type(BorderType::Rounded)
+            .border_style(if self.selected_block == 0 {
+                Style::new().blue()
+            } else {
+                Style::default()
+            });
+        frame.render_widget(&profile_block, profile_area);
+
+        let mut lines = vec![];
+        lines.push(Line::from(vec![
+            Span::styled("Name: ", Style::default()),
+            Span::styled(self.user.git.name.clone(), Style::default()),
+        ]));
+        lines.push(Line::from(vec![
+            Span::styled("Email: ", Style::default()),
+            Span::styled(self.user.git.email.clone(), Style::default()),
+        ]));
+        lines.push(Line::from(vec![
+            Span::styled("Bio: ", Style::default()),
+            Span::styled(self.user.git.bio.clone(), Style::default()),
+        ]));
+        lines.push(Line::from(vec![
+            Span::styled("Rate remaining: ", Style::default()),
+            Span::styled(self.user.rate().to_string(), Style::default()),
+        ]));
+        let text = Text::from(lines);
+        let p = Paragraph::new(text);
+        frame.render_widget(p, profile_block.inner(profile_area));
 
         let repos_list = List::new(self.repo_list.items.clone())
             .block(
