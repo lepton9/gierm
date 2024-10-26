@@ -3,8 +3,7 @@ use ratatui::{
     layout::{Constraint, Layout},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span},
-    widgets::Block,
-    widgets::Paragraph,
+    widgets::{Block, BorderType, Borders, List, ListDirection, ListItem, Paragraph},
     Frame,
 };
 use Constraint::{Fill, Length, Min};
@@ -69,7 +68,9 @@ struct TuiBlock {
 pub fn draw(frame: &mut Frame) {
     let status_text = "Status text".to_string();
     let status_area_height = if status_text.is_empty() { 2 } else { 3 };
-    let status_block = Block::bordered().title("Status");
+    let status_block = Block::bordered()
+        .title("Status")
+        .border_type(BorderType::Rounded);
 
     let vertical = Layout::vertical([Min(0)]);
     let [main_area] = vertical.areas(frame.area());
@@ -78,7 +79,7 @@ pub fn draw(frame: &mut Frame) {
 
     let left_vertical =
         Layout::vertical([Length(3), Min(0), Length(8), Length(status_area_height)]);
-    let [profile_area, commands_area, search_area, status_area] = left_vertical.areas(left_area);
+    let [profile_area, repos_area, search_area, status_area] = left_vertical.areas(left_area);
 
     // Selected text highlight
     // Paragraph::new(status_text).block(Block::default())
@@ -90,19 +91,38 @@ pub fn draw(frame: &mut Frame) {
     frame.render_widget(
         Block::bordered()
             .title("Profile")
+            .border_type(BorderType::Rounded)
             .border_style(Style::new().blue()),
         profile_area,
     );
-    frame.render_widget(
-        Block::bordered()
-            .title("Commands")
-            .border_style(Style::new()),
-        commands_area,
-    );
 
-    let search_block = Block::bordered().title("Search").border_style(Style::new());
-    let user_search_block = Block::bordered().title("User").border_style(Style::new());
-    let repo_search_block = Block::bordered().title("Repo").border_style(Style::new());
+    let items = ["Repo 1", "Repo 2", "Repo 3", "Repo 4", "Repo 5"];
+    let repos_list = List::new(items)
+        .block(
+            Block::bordered()
+                .title("Repos")
+                .border_type(BorderType::Rounded),
+        )
+        .style(Style::new().white())
+        .highlight_style(Style::new().italic())
+        .highlight_symbol(">>")
+        .repeat_highlight_symbol(true)
+        .direction(ListDirection::TopToBottom);
+
+    frame.render_widget(&repos_list, repos_area);
+
+    let search_block = Block::bordered()
+        .title("Search")
+        .border_type(BorderType::Rounded)
+        .border_style(Style::new());
+    let user_search_block = Block::bordered()
+        .border_type(BorderType::Rounded)
+        .title("User")
+        .border_style(Style::new());
+    let repo_search_block = Block::bordered()
+        .border_type(BorderType::Rounded)
+        .title("Repo")
+        .border_style(Style::new());
 
     let [user_search_area, repo_search_area] =
         Layout::vertical([Constraint::Percentage(50), Constraint::Percentage(50)])
@@ -125,5 +145,10 @@ pub fn draw(frame: &mut Frame) {
         status_block.inner(status_area),
     );
 
-    frame.render_widget(Block::bordered().title("Right"), right_area);
+    frame.render_widget(
+        Block::bordered()
+            .border_type(BorderType::Rounded)
+            .title("Right"),
+        right_area,
+    );
 }
