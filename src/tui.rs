@@ -8,10 +8,45 @@ use ratatui::{
 };
 use Constraint::{Fill, Length, Min};
 
-pub fn run_tui() {
+struct TuiState {
+    user: crate::git::User,
+    selected: u16,
+    search_user: String,
+    search_repo: String,
+    status_text: String,
+}
+
+impl TuiState {
+    pub fn new(
+        user: crate::git::User,
+        selected: u16,
+        search_user: String,
+        search_repo: String,
+        status_text: String,
+    ) -> Self {
+        Self {
+            user,
+            selected,
+            search_user,
+            search_repo,
+            status_text,
+        }
+    }
+}
+
+pub fn run_tui(user: crate::git::User) {
+    let mut tui_state = TuiState::new(
+        user,
+        0,
+        "Username".to_string(),
+        "Repo name".to_string(),
+        "Status text".to_string(),
+    );
     let mut terminal = ratatui::init();
     loop {
-        terminal.draw(draw).expect("failed to draw frame");
+        terminal
+            .draw(|frame| draw(frame, &tui_state))
+            .expect("failed to draw frame");
         if handle_events().unwrap() {
             break;
         }
@@ -49,25 +84,12 @@ fn handle_events() -> std::io::Result<bool> {
     Ok(false)
 }
 
-struct TuiLayout {
-    blocks: Vec<TuiBlock>,
-}
-
-enum BlockType {
-    PROFILE,
-    STATUS,
-    SEARCH,
-}
-
-struct TuiBlock {
-    selected: bool,
-    height: u16,
-    block_type: BlockType,
-}
-
-pub fn draw(frame: &mut Frame) {
-    let status_text = "Status text".to_string();
-    let status_area_height = if status_text.is_empty() { 2 } else { 3 };
+pub fn draw(frame: &mut Frame, tui_state: &TuiState) {
+    let status_area_height = if tui_state.status_text.is_empty() {
+        2
+    } else {
+        3
+    };
     let status_block = Block::bordered()
         .title("Status")
         .border_type(BorderType::Rounded);
@@ -131,17 +153,17 @@ pub fn draw(frame: &mut Frame) {
     frame.render_widget(&user_search_block, user_search_area);
     frame.render_widget(&repo_search_block, repo_search_area);
     frame.render_widget(
-        Paragraph::new("Username").block(Block::default()),
+        Paragraph::new(tui_state.search_user.clone()).block(Block::default()),
         user_search_block.inner(user_search_area),
     );
     frame.render_widget(
-        Paragraph::new("Repo name").block(Block::default()),
+        Paragraph::new(tui_state.search_repo.clone()).block(Block::default()),
         repo_search_block.inner(repo_search_area),
     );
 
     frame.render_widget(&status_block, status_area);
     frame.render_widget(
-        Paragraph::new(status_text).block(Block::default()),
+        Paragraph::new(tui_state.status_text.clone()).block(Block::default()),
         status_block.inner(status_area),
     );
 

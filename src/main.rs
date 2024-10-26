@@ -37,7 +37,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //     .unwrap();
     // println!("{:?}", git_user);
 
-    tui::run_tui();
+    tui::run_tui(user);
 
     return Ok(());
 }
