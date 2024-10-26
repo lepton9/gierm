@@ -4,19 +4,13 @@ use std::collections::HashMap;
 const API_URL: &str = "https://api.github.com";
 const PER_PAGE: i32 = 100;
 
-// TODO: fill
 pub async fn fetch_user(user: &mut git::User) {
-    let url = format!("{}/users/{}", API_URL, user.git.username);
-    let res = fetch_data(&url, &user).await;
-    match res {
-        Ok(v) => {
-            fetch_rate(user).await;
-        }
-        Err(e) => println!("Error: {:?}", e),
-    }
+    let git_user = search_gituser(user, &user.git.username).await;
+    user.git = git_user.unwrap();
+    fetch_rate(user).await;
 }
 
-pub async fn search_user(user: &git::User, username: &String) -> Option<git::GitUser> {
+pub async fn search_gituser(user: &git::User, username: &String) -> Option<git::GitUser> {
     let url = format!("{}/users/{}", API_URL, username);
     let res = fetch_data(&url, &user).await;
     match res {

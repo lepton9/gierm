@@ -4,9 +4,9 @@ use std::collections::HashMap;
 #[derive(Debug)]
 pub struct GitUser {
     pub username: String, // Login name
-    name: String,
-    email: String,
-    bio: String,
+    pub name: String,
+    pub email: String,
+    pub bio: String,
     pub repos: HashMap<String, Repo>,
 }
 
