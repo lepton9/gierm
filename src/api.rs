@@ -6,7 +6,7 @@ const PER_PAGE: i32 = 100;
 
 // TODO: fill
 pub async fn fetch_user(user: &mut git::User) {
-    let url = format!("{}/users/{}", API_URL, user.username);
+    let url = format!("{}/users/{}", API_URL, user.git.username);
     let res = fetch_data(&url, &user).await;
     match res {
         Ok(v) => {
@@ -16,17 +16,24 @@ pub async fn fetch_user(user: &mut git::User) {
     }
 }
 
-// TODO: return a user
-pub async fn search_user(user: &git::User, username: &String) {
+pub async fn search_user(user: &git::User, username: &String) -> Option<git::GitUser> {
     let url = format!("{}/users/{}", API_URL, username);
     let res = fetch_data(&url, &user).await;
     match res {
         Ok(v) => {
-            println!("{:?}", v);
-            let repos: HashMap<String, git::Repo> = fetch_repos(user, username).await;
-            // println!("{:?}", repos.keys());
+            let mut git_user = git::GitUser::new(
+                v["login"].to_string().replace("\"", ""),
+                v["name"].to_string().replace("\"", ""),
+                v["email"].to_string().replace("\"", ""),
+                v["bio"].to_string().replace("\"", ""),
+            );
+            git_user.repos = fetch_repos(user, username).await;
+            return Some(git_user);
         }
-        Err(e) => println!("Error: {:?}", e),
+        Err(e) => {
+            println!("Error: {:?}", e);
+            return None;
+        }
     }
 }
 

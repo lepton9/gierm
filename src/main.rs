@@ -1,5 +1,6 @@
 mod api;
 mod git;
+mod tui;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -11,26 +12,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Fetching data..");
 
     api::fetch_user(&mut user).await;
-    user.repos = api::fetch_repos(&user, &user.username).await;
+    user.git.repos = api::fetch_repos(&user, &user.git.username).await;
 
     let repo_name = "gierm".to_string();
-    let repo = api::fetch_repo(&user, &user.username, &repo_name)
+    let repo = api::fetch_repo(&user, &user.git.username, &repo_name)
         .await
         .unwrap();
     let commits: Vec<git::Commit> = api::fetch_repo_commits(&user, &repo).await;
-    if let Some(repo) = user.repos.get_mut(&repo_name) {
+    if let Some(repo) = user.git.repos.get_mut(&repo_name) {
         repo.commits = commits;
     }
     // println!("{:?}", user);
 
-    if let Some(repo) = user.repos.get(&repo_name) {
-        for commit in &repo.commits {
-            api::fetch_commit_info(&user, user.username.clone(), repo.name.clone(), commit).await;
-            println!("{:?}", commit);
-        }
-    }
+    // if let Some(repo) = user.repos.get(&repo_name) {
+    //     for commit in &repo.commits {
+    //         api::fetch_commit_info(&user, user.username.clone(), repo.name.clone(), commit).await;
+    //         println!("{:?}", commit);
+    //     }
+    // }
 
-    // api::search_user(&user, &"thePrimeagen".to_string()).await;
+    let git_user: git::GitUser = api::search_user(&user, &"thePrimeagen".to_string())
+        .await
+        .unwrap();
+    println!("{:?}", git_user);
 
-    Ok(())
+    return Ok(());
 }

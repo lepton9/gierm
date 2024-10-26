@@ -2,22 +2,39 @@ use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 
 #[derive(Debug)]
-pub struct User {
-    pub username: String,
-    password: String,
+pub struct GitUser {
+    pub username: String, // Login name
+    name: String,
     email: String,
-    remaining: i32,
+    bio: String,
     pub repos: HashMap<String, Repo>,
+}
+
+impl GitUser {
+    pub fn new(username: String, name: String, email: String, bio: String) -> Self {
+        Self {
+            username,
+            name,
+            email,
+            bio,
+            repos: HashMap::new(),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct User {
+    pub git: GitUser,
+    password: String,
+    remaining: i32,
 }
 
 impl User {
     pub fn new(username: String, password: String) -> Self {
         Self {
-            username,
+            git: GitUser::new(username, "".to_string(), "".to_string(), "".to_string()),
             password,
-            email: "".to_string(),
             remaining: 60,
-            repos: HashMap::new(),
         }
     }
 
