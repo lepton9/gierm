@@ -1,3 +1,3 @@
 # gierm
 
-Terminal Github client
+Terminal Github client and CLI tool.
