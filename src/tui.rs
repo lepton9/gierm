@@ -179,12 +179,16 @@ impl Tui {
                                 .repo_list
                                 .get_selected()
                                 .expect("No selected repo name");
-
                             let repo = self.user.git.repos.get(repo_name).unwrap();
-                            let commits: Vec<crate::git::Commit> =
-                                crate::api::fetch_repo_commits(&self.user, &repo).await;
-                            if let Some(repo) = self.user.git.repos.get_mut(repo_name) {
-                                repo.commits = commits;
+                            if repo.commits.is_empty() {
+                                let commits: Vec<crate::git::Commit> =
+                                    crate::api::fetch_repo_commits(&self.user, &repo).await;
+                                if let Some(repo) = self.user.git.repos.get_mut(repo_name) {
+                                    repo.commits = commits;
+                                    self.commit_list.items =
+                                        repo.commits.iter().map(|c| c.to_string()).collect();
+                                }
+                            } else {
                                 self.commit_list.items =
                                     repo.commits.iter().map(|c| c.to_string()).collect();
                             }
@@ -348,13 +352,6 @@ impl Tui {
             commit_list_area,
             &mut self.commit_list.state,
         );
-
-        // frame.render_widget(
-        //     Block::bordered()
-        //         .border_type(BorderType::Rounded)
-        //         .title("Commits"),
-        //     commit_list_area,
-        // );
 
         frame.render_widget(
             Block::bordered()
