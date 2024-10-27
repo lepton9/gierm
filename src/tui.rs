@@ -66,14 +66,31 @@ impl<T> StatefulList<T> {
     }
 }
 
+#[derive(PartialEq)]
+enum BlockType {
+    Profile,
+    Repos,
+    Search,
+    Default,
+}
+
+fn block_type(b_i: u8) -> BlockType {
+    match b_i {
+        0 => BlockType::Profile,
+        1 => BlockType::Repos,
+        2 => BlockType::Search,
+        _ => BlockType::Default,
+    }
+}
+
 struct Tui {
     user: crate::git::User,
-    selected_block: i32,
+    selected_block: u8,
     repo_list: StatefulList<String>,
     search_user: String,
     search_repo: String,
     status_text: String,
-    blocks: i32,
+    blocks_n: u8,
 }
 
 impl Tui {
@@ -82,7 +99,7 @@ impl Tui {
         search_user: String,
         search_repo: String,
         status_text: String,
-        blocks: i32,
+        blocks: u8,
     ) -> Self {
         let repos =
             StatefulList::with_items((&user).git.repos.keys().cloned().collect::<Vec<String>>());
@@ -93,7 +110,7 @@ impl Tui {
             search_user,
             search_repo,
             status_text,
-            blocks,
+            blocks_n: blocks,
         }
     }
 
@@ -110,12 +127,12 @@ impl Tui {
         ratatui::restore();
     }
 
-    pub fn next(&mut self) {
-        self.selected_block = (self.selected_block + 1) % self.blocks;
+    pub fn next_block(&mut self) {
+        self.selected_block = (self.selected_block + 1) % self.blocks_n;
     }
 
-    pub fn previous(&mut self) {
-        self.selected_block = (self.selected_block + self.blocks - 1) % self.blocks;
+    pub fn previous_block(&mut self) {
+        self.selected_block = (self.selected_block + self.blocks_n - 1) % self.blocks_n;
     }
 
     fn handle_events(&mut self) -> std::io::Result<bool> {
@@ -133,10 +150,10 @@ impl Tui {
                     }
                 }
                 KeyCode::Left => {
-                    self.previous();
+                    self.previous_block();
                 }
                 KeyCode::Right => {
-                    self.next();
+                    self.next_block();
                 }
                 KeyCode::Enter => {
                     //
@@ -171,7 +188,7 @@ impl Tui {
         let profile_block = Block::bordered()
             .title(self.user.git.username.clone())
             .border_type(BorderType::Rounded)
-            .border_style(if self.selected_block == 0 {
+            .border_style(if block_type(self.selected_block) == BlockType::Profile {
                 Style::new().blue()
             } else {
                 Style::default()
@@ -204,7 +221,7 @@ impl Tui {
                 Block::bordered()
                     .title("Repos")
                     .border_type(BorderType::Rounded)
-                    .border_style(if self.selected_block == 1 {
+                    .border_style(if block_type(self.selected_block) == BlockType::Repos {
                         Style::new().blue()
                     } else {
                         Style::default()
@@ -221,7 +238,7 @@ impl Tui {
         let search_block = Block::bordered()
             .title("Search")
             .border_type(BorderType::Rounded)
-            .border_style(if self.selected_block == 2 {
+            .border_style(if block_type(self.selected_block) == BlockType::Search {
                 Style::new().blue()
             } else {
                 Style::default()
