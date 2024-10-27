@@ -88,6 +88,7 @@ struct Tui {
     status_text: String,
     blocks_on_left: u8,
     blocks_on_right: u8,
+    last_block: Option<u8>,
     searched_user: Option<crate::git::GitUser>,
 }
 
@@ -111,6 +112,7 @@ impl Tui {
             status_text,
             blocks_on_left,
             blocks_on_right,
+            last_block: None,
             searched_user: None,
         }
     }
@@ -128,7 +130,7 @@ impl Tui {
         ratatui::restore();
     }
 
-    pub fn next_block(&mut self) {
+    fn next_block(&mut self) {
         if self.selected_block >= self.blocks_on_left {
             self.selected_block += 1;
             if self.selected_block == self.blocks_on_left + self.blocks_on_right {
@@ -139,7 +141,7 @@ impl Tui {
         }
     }
 
-    pub fn previous_block(&mut self) {
+    fn previous_block(&mut self) {
         if self.selected_block >= self.blocks_on_left {
             self.selected_block -= 1;
             if self.selected_block < self.blocks_on_left {
@@ -149,6 +151,11 @@ impl Tui {
             self.selected_block =
                 (self.selected_block + self.blocks_on_left - 1) % self.blocks_on_left;
         }
+    }
+
+    fn goto_right(&mut self) {
+        self.last_block = Some(self.selected_block);
+        self.selected_block = self.blocks_on_left;
     }
 
     async fn handle_events(&mut self) -> std::io::Result<bool> {
@@ -193,6 +200,7 @@ impl Tui {
                                     repo.commits.iter().map(|c| c.to_string()).collect();
                             }
                         }
+                        self.goto_right();
                     }
                     BlockType::Search => {}
                     BlockType::Info => {}
@@ -201,7 +209,10 @@ impl Tui {
                     _ => {}
                 },
                 KeyCode::Esc => {
-                    //
+                    if let Some(b) = self.last_block {
+                        self.selected_block = b;
+                        self.last_block = None;
+                    }
                 }
                 _ => {}
             },
@@ -211,7 +222,7 @@ impl Tui {
         Ok(false)
     }
 
-    pub fn draw(&mut self, frame: &mut Frame) {
+    fn draw(&mut self, frame: &mut Frame) {
         let block_highlight_style = Style::new().green();
         let status_area_height = if self.status_text.is_empty() { 2 } else { 3 };
 
@@ -225,8 +236,7 @@ impl Tui {
         let [profile_area, repos_area, search_area, status_area] = left_vertical.areas(left_area);
 
         let right_vertical = Layout::vertical([Length(10), Min(10), Min(10)]);
-        let [repo_info_area, commit_list_area, search_result_area] =
-            right_vertical.areas(right_area);
+        let [info_area, commit_list_area, search_result_area] = right_vertical.areas(right_area);
 
         // Selected text highlight
         // Paragraph::new(status_text).block(Block::default())
@@ -323,12 +333,15 @@ impl Tui {
             status_block.inner(status_area),
         );
 
-        frame.render_widget(
-            Block::bordered()
-                .border_type(BorderType::Rounded)
-                .title("Info"),
-            repo_info_area,
-        );
+        let info_block = Block::bordered()
+            .title("Info")
+            .border_type(BorderType::Rounded)
+            .border_style(if block_type(self.selected_block) == BlockType::Info {
+                block_highlight_style
+            } else {
+                Style::default()
+            });
+        frame.render_widget(info_block, info_area);
 
         let commit_list_block = List::new(self.commit_list.items.clone())
             .block(
@@ -346,18 +359,22 @@ impl Tui {
             .highlight_symbol(">>")
             .repeat_highlight_symbol(true)
             .direction(ListDirection::TopToBottom);
-
         frame.render_stateful_widget(
             &commit_list_block,
             commit_list_area,
             &mut self.commit_list.state,
         );
 
-        frame.render_widget(
-            Block::bordered()
-                .border_type(BorderType::Rounded)
-                .title("Results"),
-            search_result_area,
-        );
+        let search_result_block = Block::bordered()
+            .title("Results")
+            .border_type(BorderType::Rounded)
+            .border_style(
+                if block_type(self.selected_block) == BlockType::SearchResults {
+                    block_highlight_style
+                } else {
+                    Style::default()
+                },
+            );
+        frame.render_widget(search_result_block, search_result_area);
     }
 }
