@@ -168,15 +168,23 @@ pub struct File {
     pub sha: String,
     pub additions: i32,
     pub deletions: i32,
+    pub patch_diff: String,
 }
 
 impl File {
-    pub fn new(name: String, sha: String, additions: i32, deletions: i32) -> Self {
+    pub fn new(
+        name: String,
+        sha: String,
+        additions: i32,
+        deletions: i32,
+        patch_diff: String,
+    ) -> Self {
         Self {
             name,
             sha,
             additions,
             deletions,
+            patch_diff,
         }
     }
 }

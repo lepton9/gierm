@@ -148,6 +148,7 @@ pub async fn fetch_commit_info(
                             f["sha"].to_string().replace("\"", ""),
                             f["additions"].as_i64().unwrap_or(0) as i32,
                             f["deletions"].as_i64().unwrap_or(0) as i32,
+                            f["patch"].to_string(),
                         );
                         commit_info.files.push(file);
                     }
