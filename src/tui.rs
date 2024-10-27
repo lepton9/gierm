@@ -14,7 +14,7 @@ use Constraint::{Fill, Length, Min};
 pub async fn run_tui(user: crate::git::User) {
     let mut tui = Tui::new(
         user,
-        "thePrimeagen".to_string(),
+        "lepton9".to_string(),
         "".to_string(),
         "Status text".to_string(),
         3,
@@ -66,6 +66,8 @@ enum BlockType {
     Info,
     Commits,
     SearchResults,
+    SearchUser,
+    SearchRepo,
     Default,
 }
 
@@ -77,8 +79,14 @@ fn block_type(b_i: u8) -> BlockType {
         3 => BlockType::Info,
         4 => BlockType::Commits,
         5 => BlockType::SearchResults,
+        6 => BlockType::SearchUser,
+        7 => BlockType::SearchRepo,
         _ => BlockType::Default,
     }
+}
+
+fn block_type_to_u8(block_type: BlockType) -> u8 {
+    return block_type as u8;
 }
 
 struct SearchedUser {
@@ -89,6 +97,9 @@ struct SearchedUser {
     filter: String,
 }
 
+// TODO: add func to modify filter and update the searched repos
+// instead of fetching the user again
+// Only if username field is the same
 impl SearchedUser {
     pub fn new(user: crate::git::GitUser, filter: String) -> Self {
         let repos_state = StateL::new((&user).repos.keys().len());
@@ -183,6 +194,7 @@ impl Tui {
         ratatui::restore();
     }
 
+    // TODO: fix movement in search form fields
     fn next_block(&mut self) {
         if self.selected_block >= self.blocks_on_left {
             self.selected_block += 1;
@@ -211,9 +223,13 @@ impl Tui {
         return Some(self.repo_list[repo_index].clone());
     }
 
-    fn goto_right(&mut self) {
+    fn goto_block(&mut self, block_type: BlockType) {
         self.last_block = Some(self.selected_block);
-        self.selected_block = self.blocks_on_left;
+        self.selected_block = block_type_to_u8(block_type);
+    }
+
+    fn goto_right(&mut self) {
+        self.goto_block(block_type(self.blocks_on_left));
     }
 
     async fn handle_events(&mut self) -> std::io::Result<bool> {
@@ -264,6 +280,10 @@ impl Tui {
                             self.goto_right();
                         }
                         BlockType::Search => {
+                            // TODO: goto SearchUser instead to the right
+                            // from SearchUser or SearchRepo goto right on enter
+                            // self.goto_block(BlockType::SearchUser);
+
                             if self.searched_user.is_none()
                                 || self.search_user.to_lowercase()
                                     != self
@@ -349,7 +369,6 @@ impl Tui {
                 }
                 _ => {}
             },
-            // handle other events
             _ => {}
         }
         Ok(false)
@@ -371,10 +390,6 @@ impl Tui {
 
         let right_vertical = Layout::vertical([Length(10), Min(10), Min(10)]);
         let [info_area, commit_list_area, search_result_area] = right_vertical.areas(right_area);
-
-        // Selected text highlight
-        // Paragraph::new(status_text).block(Block::default())
-        //     .bg(ratatui::prelude::Color::LightBlue)
 
         let profile_block = Block::bordered()
             .title(self.user.git.username.clone())
@@ -457,11 +472,23 @@ impl Tui {
         let user_search_block = Block::bordered()
             .border_type(BorderType::Rounded)
             .title("User")
-            .border_style(Style::new());
+            .border_style(
+                if block_type(self.selected_block) == BlockType::SearchUser {
+                    block_highlight_style
+                } else {
+                    Style::default()
+                },
+            );
         let repo_search_block = Block::bordered()
             .border_type(BorderType::Rounded)
             .title("Repo")
-            .border_style(Style::new());
+            .border_style(
+                if block_type(self.selected_block) == BlockType::SearchRepo {
+                    block_highlight_style
+                } else {
+                    Style::default()
+                },
+            );
 
         let [user_search_area, repo_search_area] =
             Layout::vertical([Constraint::Percentage(50), Constraint::Percentage(50)])
@@ -487,6 +514,7 @@ impl Tui {
             status_block.inner(status_area),
         );
 
+        // TODO: show searched user repos and info
         if self.searched_user.is_some() {}
 
         let repo_name = self.selected_repo_name();
