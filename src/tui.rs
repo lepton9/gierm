@@ -167,6 +167,11 @@ impl Tui {
         }
     }
 
+    fn selected_repo_name(&self) -> Option<String> {
+        let repo_index = self.repo_list_state.get_selected_index()?;
+        return Some(self.repo_list[repo_index].clone());
+    }
+
     fn goto_right(&mut self) {
         self.last_block = Some(self.selected_block);
         self.selected_block = self.blocks_on_left;
@@ -196,16 +201,8 @@ impl Tui {
                     BlockType::Profile => {}
                     BlockType::Repos => {
                         if self.repo_list_state.state != ListState::default() {
-                            let repo_index = self
-                                .repo_list_state
-                                .get_selected_index()
-                                .expect("Expected repo index");
-                            let repo = self
-                                .user
-                                .git
-                                .repos
-                                .get(&self.repo_list[repo_index])
-                                .unwrap();
+                            let repo_name = self.selected_repo_name().expect("Expected repo index");
+                            let repo = self.user.git.repos.get(&repo_name).unwrap();
                             if repo.commits.is_empty() {
                                 let commits: Vec<crate::git::Commit> =
                                     crate::api::fetch_repo_commits(&self.user, &repo).await;
@@ -214,6 +211,8 @@ impl Tui {
                                     repo.commits = commits;
                                     self.commit_list.items_len = repo.commits.len();
                                 }
+                                self.status_text =
+                                    format!("Fetched {} commits", self.commit_list.items_len);
                             } else {
                                 self.commit_list.items_len = repo.commits.len();
                             }
@@ -228,6 +227,7 @@ impl Tui {
                     _ => {}
                 },
                 KeyCode::Esc => {
+                    self.status_text = "".to_string();
                     if let Some(b) = self.last_block {
                         self.selected_block = b;
                         self.last_block = None;
@@ -373,26 +373,53 @@ impl Tui {
             status_block.inner(status_area),
         );
 
-        let info_block = Block::bordered()
-            .title("Info")
-            .border_type(BorderType::Rounded)
-            .border_style(if block_type(self.selected_block) == BlockType::Info {
-                block_highlight_style
-            } else {
-                Style::default()
-            });
-        frame.render_widget(info_block, info_area);
-
-        let repo_index = self.repo_list_state.get_selected_index();
-        let commit_items: Vec<String> = match repo_index {
-            Some(i) => {
+        let repo_name = self.selected_repo_name();
+        let commit_items: Vec<String>;
+        let mut info_lines = vec![];
+        match repo_name {
+            Some(name) => {
                 // TODO: selected repo can also be a searched user's repo
-                let repo = self.user.git.repos.get(&self.repo_list[i]).unwrap();
+                let repo = self.user.git.repos.get(&name).unwrap();
                 // TODO: different printing
-                repo.commits.iter().map(|c| c.to_string()).collect()
+                commit_items = repo.commits.iter().map(|c| c.to_string()).collect();
+                info_lines.push(Line::from(vec![Span::styled(
+                    repo.name.clone(),
+                    Style::default(),
+                )]));
+                info_lines.push(Line::from(vec![
+                    Span::styled("Description: ", Style::default()),
+                    Span::styled(repo.description.clone(), Style::default()),
+                ]));
+                info_lines.push(Line::from(vec![
+                    Span::styled("Language: ", Style::default()),
+                    Span::styled(repo.language.clone(), Style::default()),
+                ]));
+                info_lines.push(Line::from(vec![
+                    Span::styled("Last updated: ", Style::default()),
+                    Span::styled(repo.updated_at.clone().to_string(), Style::default()),
+                ]));
+                info_lines.push(Line::from(vec![
+                    Span::styled("Commits: ", Style::default()),
+                    Span::styled(repo.commits.len().to_string(), Style::default()),
+                ]));
             }
-            None => Vec::new(),
+            None => {
+                commit_items = Vec::new();
+            }
         };
+
+        let text = Text::from(info_lines);
+        let info_block = Paragraph::new(text).block(
+            Block::bordered()
+                .title("Info")
+                .border_type(BorderType::Rounded)
+                .border_style(if block_type(self.selected_block) == BlockType::Info {
+                    block_highlight_style
+                } else {
+                    Style::default()
+                }),
+        );
+        frame.render_widget(info_block, info_area);
 
         let commit_list_block = List::new(commit_items)
             .block(

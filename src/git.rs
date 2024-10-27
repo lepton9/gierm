@@ -63,8 +63,8 @@ impl User {
 pub struct Repo {
     pub user: String,
     pub name: String,
-    description: String,
-    language: String,
+    pub description: String,
+    pub language: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub commits: Vec<Commit>,
