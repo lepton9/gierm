@@ -1,9 +1,12 @@
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
-    layout::{Constraint, Layout},
+    layout::{Constraint, Layout, Margin},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span, Text},
-    widgets::{Block, BorderType, Borders, List, ListDirection, ListItem, ListState, Paragraph},
+    widgets::{
+        Block, BorderType, Borders, List, ListDirection, ListItem, ListState, Paragraph, Scrollbar,
+        ScrollbarOrientation, ScrollbarState,
+    },
     Frame,
 };
 use Constraint::{Fill, Length, Min};
@@ -234,7 +237,8 @@ impl Tui {
 
         let left_vertical =
             Layout::vertical([Length(6), Min(0), Length(8), Length(status_area_height)]);
-        let [profile_area, repos_area, search_area, status_area] = left_vertical.areas(left_area);
+        let [profile_area, repo_list_area, search_area, status_area] =
+            left_vertical.areas(left_area);
 
         let right_vertical = Layout::vertical([Length(10), Min(10), Min(10)]);
         let [info_area, commit_list_area, search_result_area] = right_vertical.areas(right_area);
@@ -274,7 +278,7 @@ impl Tui {
         let p = Paragraph::new(text);
         frame.render_widget(p, profile_block.inner(profile_area));
 
-        let repos_list_block = List::new(self.repo_list.items.clone())
+        let repo_list_block = List::new(self.repo_list.items.clone())
             .block(
                 Block::bordered()
                     .title("Repos")
@@ -291,7 +295,23 @@ impl Tui {
             .repeat_highlight_symbol(true)
             .direction(ListDirection::TopToBottom);
 
-        frame.render_stateful_widget(&repos_list_block, repos_area, &mut self.repo_list.state);
+        frame.render_stateful_widget(&repo_list_block, repo_list_area, &mut self.repo_list.state);
+
+        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(Some("↑"))
+            .end_symbol(Some("↓"));
+        let scrollbar_margin = Margin {
+            vertical: 1,
+            horizontal: 0,
+        };
+
+        let mut repo_list_scrollbar_state = ScrollbarState::new(self.repo_list.items.len())
+            .position(self.repo_list.state.selected().unwrap_or(0));
+        frame.render_stateful_widget(
+            scrollbar.clone(),
+            repo_list_area.inner(scrollbar_margin),
+            &mut repo_list_scrollbar_state,
+        );
 
         let search_block = Block::bordered()
             .title("Search")
@@ -364,6 +384,14 @@ impl Tui {
             &commit_list_block,
             commit_list_area,
             &mut self.commit_list.state,
+        );
+
+        let mut commit_list_scrollbar_state = ScrollbarState::new(self.commit_list.items.len())
+            .position(self.commit_list.state.selected().unwrap_or(0));
+        frame.render_stateful_widget(
+            scrollbar,
+            commit_list_area.inner(scrollbar_margin),
+            &mut commit_list_scrollbar_state,
         );
 
         let search_result_block = Block::bordered()
