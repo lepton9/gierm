@@ -65,8 +65,8 @@ pub struct Repo {
     pub name: String,
     description: String,
     language: String,
-    created_at: DateTime<Utc>,
-    updated_at: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
     pub commits: Vec<Commit>,
 }
 

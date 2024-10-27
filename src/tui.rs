@@ -24,16 +24,16 @@ pub async fn run_tui(user: crate::git::User) {
 }
 
 #[derive(Debug, Default)]
-pub struct StatefulList<T> {
+pub struct StateL {
     state: ListState,
-    items: Vec<T>,
+    items_len: usize,
 }
 
-impl<T> StatefulList<T> {
-    pub fn new(items: Vec<T>) -> Self {
+impl StateL {
+    pub fn new(len: usize) -> Self {
         Self {
             state: ListState::default(),
-            items,
+            items_len: len,
         }
     }
 
@@ -41,7 +41,7 @@ impl<T> StatefulList<T> {
         let i = self
             .state
             .selected()
-            .map_or(0, |i| (i + 1) % self.items.len());
+            .map_or(0, |i| (i + 1) % self.items_len);
         self.state.select(Some(i));
     }
 
@@ -49,12 +49,12 @@ impl<T> StatefulList<T> {
         let i = self
             .state
             .selected()
-            .map_or(0, |i| (i + self.items.len() - 1) % self.items.len());
+            .map_or(0, |i| (i + self.items_len - 1) % self.items_len);
         self.state.select(Some(i));
     }
 
-    pub fn get_selected(&self) -> Option<&T> {
-        self.state.selected().map(|index| &self.items[index])
+    pub fn get_selected_index(&self) -> Option<usize> {
+        return self.state.selected();
     }
 }
 
@@ -84,8 +84,9 @@ fn block_type(b_i: u8) -> BlockType {
 struct Tui {
     user: crate::git::User,
     selected_block: u8,
-    repo_list: StatefulList<String>, // TODO: keep only the state and use the Vec in User
-    commit_list: StatefulList<String>,
+    repo_list_state: StateL,
+    repo_list: Vec<String>,
+    commit_list: StateL, // Can be users or searched users commits
     search_user: String,
     search_repo: String,
     status_text: String,
@@ -104,12 +105,22 @@ impl Tui {
         blocks_on_left: u8,
         blocks_on_right: u8,
     ) -> Self {
-        let repos = StatefulList::new((&user).git.repos.keys().cloned().collect::<Vec<String>>());
+        let repos_state = StateL::new((&user).git.repos.keys().len());
+        let mut repos: Vec<String> = user.git.repos.keys().cloned().collect();
+        repos.sort_by(|x, y| {
+            user.git
+                .repos
+                .get(y)
+                .unwrap()
+                .updated_at
+                .cmp(&user.git.repos.get(x).unwrap().updated_at)
+        });
         Self {
             user,
             selected_block: 0,
+            repo_list_state: repos_state,
             repo_list: repos,
-            commit_list: StatefulList::new(Vec::new()),
+            commit_list: StateL::new(0),
             search_user,
             search_repo,
             status_text,
@@ -166,12 +177,12 @@ impl Tui {
             Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
                 KeyCode::Char('q') => return Ok(true),
                 KeyCode::Up => match block_type(self.selected_block) {
-                    BlockType::Repos => self.repo_list.previous(),
+                    BlockType::Repos => self.repo_list_state.previous(),
                     BlockType::Commits => self.commit_list.previous(),
                     _ => {}
                 },
                 KeyCode::Down => match block_type(self.selected_block) {
-                    BlockType::Repos => self.repo_list.next(),
+                    BlockType::Repos => self.repo_list_state.next(),
                     BlockType::Commits => self.commit_list.next(),
                     _ => {}
                 },
@@ -184,23 +195,27 @@ impl Tui {
                 KeyCode::Enter => match block_type(self.selected_block) {
                     BlockType::Profile => {}
                     BlockType::Repos => {
-                        if self.repo_list.state != ListState::default() {
-                            let repo_name = self
-                                .repo_list
-                                .get_selected()
-                                .expect("No selected repo name");
-                            let repo = self.user.git.repos.get(repo_name).unwrap();
+                        if self.repo_list_state.state != ListState::default() {
+                            let repo_index = self
+                                .repo_list_state
+                                .get_selected_index()
+                                .expect("Expected repo index");
+                            let repo = self
+                                .user
+                                .git
+                                .repos
+                                .get(&self.repo_list[repo_index])
+                                .unwrap();
                             if repo.commits.is_empty() {
                                 let commits: Vec<crate::git::Commit> =
                                     crate::api::fetch_repo_commits(&self.user, &repo).await;
-                                if let Some(repo) = self.user.git.repos.get_mut(repo_name) {
+                                if let Some(repo) = self.user.git.repos.get_mut(&repo.name.clone())
+                                {
                                     repo.commits = commits;
-                                    self.commit_list.items =
-                                        repo.commits.iter().map(|c| c.to_string()).collect();
+                                    self.commit_list.items_len = repo.commits.len();
                                 }
                             } else {
-                                self.commit_list.items =
-                                    repo.commits.iter().map(|c| c.to_string()).collect();
+                                self.commit_list.items_len = repo.commits.len();
                             }
                         }
                         self.commit_list.state = ListState::default();
@@ -278,7 +293,7 @@ impl Tui {
         let p = Paragraph::new(text);
         frame.render_widget(p, profile_block.inner(profile_area));
 
-        let repo_list_block = List::new(self.repo_list.items.clone())
+        let repo_list_block = List::new(self.repo_list.clone())
             .block(
                 Block::bordered()
                     .title("Repos")
@@ -295,7 +310,11 @@ impl Tui {
             .repeat_highlight_symbol(true)
             .direction(ListDirection::TopToBottom);
 
-        frame.render_stateful_widget(&repo_list_block, repo_list_area, &mut self.repo_list.state);
+        frame.render_stateful_widget(
+            &repo_list_block,
+            repo_list_area,
+            &mut self.repo_list_state.state,
+        );
 
         let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
             .begin_symbol(Some("↑"))
@@ -305,8 +324,8 @@ impl Tui {
             horizontal: 0,
         };
 
-        let mut repo_list_scrollbar_state = ScrollbarState::new(self.repo_list.items.len())
-            .position(self.repo_list.state.selected().unwrap_or(0));
+        let mut repo_list_scrollbar_state = ScrollbarState::new(self.repo_list_state.items_len)
+            .position(self.repo_list_state.state.selected().unwrap_or(0));
         frame.render_stateful_widget(
             scrollbar.clone(),
             repo_list_area.inner(scrollbar_margin),
@@ -364,7 +383,18 @@ impl Tui {
             });
         frame.render_widget(info_block, info_area);
 
-        let commit_list_block = List::new(self.commit_list.items.clone())
+        let repo_index = self.repo_list_state.get_selected_index();
+        let commit_items: Vec<String> = match repo_index {
+            Some(i) => {
+                // TODO: selected repo can also be a searched user's repo
+                let repo = self.user.git.repos.get(&self.repo_list[i]).unwrap();
+                // TODO: different printing
+                repo.commits.iter().map(|c| c.to_string()).collect()
+            }
+            None => Vec::new(),
+        };
+
+        let commit_list_block = List::new(commit_items)
             .block(
                 Block::bordered()
                     .title("Commits")
@@ -386,7 +416,7 @@ impl Tui {
             &mut self.commit_list.state,
         );
 
-        let mut commit_list_scrollbar_state = ScrollbarState::new(self.commit_list.items.len())
+        let mut commit_list_scrollbar_state = ScrollbarState::new(self.commit_list.items_len)
             .position(self.commit_list.state.selected().unwrap_or(0));
         frame.render_stateful_widget(
             scrollbar,
