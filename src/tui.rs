@@ -264,7 +264,16 @@ impl Tui {
                             self.goto_right();
                         }
                         BlockType::Search => {
-                            if !self.searched_user.is_some() {
+                            if self.searched_user.is_none()
+                                || self.search_user.to_lowercase()
+                                    != self
+                                        .searched_user
+                                        .as_ref()
+                                        .unwrap()
+                                        .user
+                                        .name
+                                        .to_lowercase()
+                            {
                                 let search_result =
                                     crate::api::search_gituser(&self.user, &self.search_user).await;
                                 self.searched_user = match search_result {
