@@ -257,7 +257,9 @@ impl Tui {
                     match block_type(self.selected_block) {
                         BlockType::Profile => {}
                         BlockType::Repos => {
-                            if self.repo_list_state.state != ListState::default() {
+                            if self.repo_list_state.state == ListState::default() {
+                                self.repo_list_state.next();
+                            } else {
                                 let repo_name =
                                     self.selected_repo_name().expect("Expected repo index");
                                 let repo = self.user.git.repos.get(&repo_name).unwrap();
@@ -275,9 +277,9 @@ impl Tui {
                                 } else {
                                     self.commit_list.items_len = repo.commits.len();
                                 }
+                                self.commit_list.state = ListState::default();
+                                self.goto_right();
                             }
-                            self.commit_list.state = ListState::default();
-                            self.goto_right();
                         }
                         BlockType::Search => {
                             // TODO: goto SearchUser instead to the right
