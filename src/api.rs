@@ -126,11 +126,11 @@ pub async fn fetch_commit_info(
     user: &git::User,
     username: String,
     repo_name: String,
-    commit: &git::Commit,
+    commit_sha: String,
 ) -> git::CommitInfo {
     let url = format!(
         "{}/repos/{}/{}/commits/{}",
-        API_URL, username, repo_name, commit.sha
+        API_URL, username, repo_name, commit_sha
     );
     let res = fetch_data(&url, &user).await;
     match res {

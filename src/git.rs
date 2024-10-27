@@ -110,7 +110,7 @@ pub struct Commit {
     pub sha: String,
     pub committer: String, // Username
     pub date: DateTime<Utc>,
-    pub info: CommitInfo,
+    pub info: Option<CommitInfo>,
 }
 
 impl Commit {
@@ -122,12 +122,16 @@ impl Commit {
             sha,
             committer,
             date: dt,
-            info: CommitInfo::default(),
+            info: None,
         }
     }
 
     pub fn to_string(&self) -> String {
         return format!("{} {}", self.date, self.message);
+    }
+
+    pub fn sha_short(&self) -> String {
+        return self.sha.chars().into_iter().take(8).collect();
     }
 }
 

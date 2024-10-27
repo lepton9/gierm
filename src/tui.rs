@@ -197,35 +197,74 @@ impl Tui {
                 KeyCode::Right => {
                     self.next_block();
                 }
-                KeyCode::Enter => match block_type(self.selected_block) {
-                    BlockType::Profile => {}
-                    BlockType::Repos => {
-                        if self.repo_list_state.state != ListState::default() {
-                            let repo_name = self.selected_repo_name().expect("Expected repo index");
-                            let repo = self.user.git.repos.get(&repo_name).unwrap();
-                            if repo.commits.is_empty() {
-                                let commits: Vec<crate::git::Commit> =
-                                    crate::api::fetch_repo_commits(&self.user, &repo).await;
-                                if let Some(repo) = self.user.git.repos.get_mut(&repo.name.clone())
-                                {
-                                    repo.commits = commits;
+                KeyCode::Enter => {
+                    self.status_text = "".to_string();
+                    match block_type(self.selected_block) {
+                        BlockType::Profile => {}
+                        BlockType::Repos => {
+                            if self.repo_list_state.state != ListState::default() {
+                                let repo_name =
+                                    self.selected_repo_name().expect("Expected repo index");
+                                let repo = self.user.git.repos.get(&repo_name).unwrap();
+                                if repo.commits.is_empty() {
+                                    let commits: Vec<crate::git::Commit> =
+                                        crate::api::fetch_repo_commits(&self.user, &repo).await;
+                                    if let Some(repo) =
+                                        self.user.git.repos.get_mut(&repo.name.clone())
+                                    {
+                                        repo.commits = commits;
+                                        self.commit_list.items_len = repo.commits.len();
+                                    }
+                                    self.status_text =
+                                        format!("Fetched {} commits", self.commit_list.items_len);
+                                } else {
                                     self.commit_list.items_len = repo.commits.len();
                                 }
-                                self.status_text =
-                                    format!("Fetched {} commits", self.commit_list.items_len);
-                            } else {
-                                self.commit_list.items_len = repo.commits.len();
+                            }
+                            self.commit_list.state = ListState::default();
+                            self.goto_right();
+                        }
+                        BlockType::Search => {}
+                        BlockType::Info => {}
+                        BlockType::Commits => {
+                            if self.repo_list_state.state != ListState::default() {
+                                if let Some(index) = self.commit_list.get_selected_index() {
+                                    let username = &self.user.git.username;
+                                    let repo_name = self.selected_repo_name().unwrap();
+                                    let repo = self.user.git.repos.get(&repo_name.clone()).unwrap();
+                                    let commit =
+                                        repo.commits.get(index).map(|commit| commit).unwrap();
+                                    if !commit.info.is_some() {
+                                        let commit_info = crate::api::fetch_commit_info(
+                                            &self.user,
+                                            username.clone(),
+                                            repo_name.clone(),
+                                            commit.sha.clone(),
+                                        )
+                                        .await;
+                                        {
+                                            if let Some(commit) = self
+                                                .user
+                                                .git
+                                                .repos
+                                                .get_mut(&repo_name)
+                                                .and_then(|repo| repo.commits.get_mut(index))
+                                            {
+                                                commit.info = Some(commit_info);
+                                                self.status_text = format!(
+                                                    "Fetched commit info for {}",
+                                                    commit.sha_short()
+                                                );
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
-                        self.commit_list.state = ListState::default();
-                        self.goto_right();
+                        BlockType::SearchResults => {}
+                        _ => {}
                     }
-                    BlockType::Search => {}
-                    BlockType::Info => {}
-                    BlockType::Commits => {}
-                    BlockType::SearchResults => {}
-                    _ => {}
-                },
+                }
                 KeyCode::Esc => {
                     self.status_text = "".to_string();
                     if let Some(b) = self.last_block {
