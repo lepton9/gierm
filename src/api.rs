@@ -36,7 +36,7 @@ pub async fn fetch_rate(user: &mut git::User) {
         Ok(v) => {
             let rate_limit: i32 = v["rate"]["remaining"].as_i64().unwrap_or(0) as i32;
             user.set_ratelimit(rate_limit);
-            println!("Rate remaining: {}", user.rate());
+            // println!("Rate remaining: {}", user.rate());
         }
         Err(e) => println!("Error: {:?}", e),
     }
@@ -196,7 +196,7 @@ pub async fn fetch_data(
             "Authorization",
             format!("Token {}", user.get_token()).parse().unwrap(),
         );
-        println!("GET: {}", fetch_url);
+        // println!("GET: {}", fetch_url);
         let res = client
             .get(fetch_url)
             .headers(headers)
@@ -217,7 +217,7 @@ pub async fn fetch_data(
                         serde_json::Value::Array(ref mut items) => {
                             if let serde_json::Value::Array(page_items) = v {
                                 items.extend(page_items);
-                                println!("Len: {}", items.len())
+                                // println!("Len: {}", items.len())
                             }
                         }
                         serde_json::Value::Object(ref mut map) => {

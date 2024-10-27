@@ -162,16 +162,16 @@ impl Tui {
         match event::read()? {
             Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
                 KeyCode::Char('q') => return Ok(true),
-                KeyCode::Up => {
-                    if block_type(self.selected_block) == BlockType::Repos {
-                        self.repo_list.previous();
-                    }
-                }
-                KeyCode::Down => {
-                    if block_type(self.selected_block) == BlockType::Repos {
-                        self.repo_list.next();
-                    }
-                }
+                KeyCode::Up => match block_type(self.selected_block) {
+                    BlockType::Repos => self.repo_list.previous(),
+                    BlockType::Commits => self.commit_list.previous(),
+                    _ => {}
+                },
+                KeyCode::Down => match block_type(self.selected_block) {
+                    BlockType::Repos => self.repo_list.next(),
+                    BlockType::Commits => self.commit_list.next(),
+                    _ => {}
+                },
                 KeyCode::Left => {
                     self.previous_block();
                 }
@@ -200,6 +200,7 @@ impl Tui {
                                     repo.commits.iter().map(|c| c.to_string()).collect();
                             }
                         }
+                        self.commit_list.state = ListState::default();
                         self.goto_right();
                     }
                     BlockType::Search => {}
@@ -286,7 +287,7 @@ impl Tui {
             )
             .style(Style::new().white())
             .highlight_style(Style::new().italic().blue())
-            .highlight_symbol(">>")
+            .highlight_symbol("")
             .repeat_highlight_symbol(true)
             .direction(ListDirection::TopToBottom);
 
@@ -356,7 +357,7 @@ impl Tui {
             )
             .style(Style::new().white())
             .highlight_style(Style::new().italic().blue())
-            .highlight_symbol(">>")
+            .highlight_symbol("")
             .repeat_highlight_symbol(true)
             .direction(ListDirection::TopToBottom);
         frame.render_stateful_widget(
