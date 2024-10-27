@@ -15,6 +15,7 @@ pub fn run_tui(user: crate::git::User) {
         "Repo name".to_string(),
         "Status text".to_string(),
         3,
+        3,
     );
     tui.run();
 }
@@ -71,6 +72,9 @@ enum BlockType {
     Profile,
     Repos,
     Search,
+    Info,
+    Commits,
+    SearchResults,
     Default,
 }
 
@@ -79,6 +83,9 @@ fn block_type(b_i: u8) -> BlockType {
         0 => BlockType::Profile,
         1 => BlockType::Repos,
         2 => BlockType::Search,
+        3 => BlockType::Info,
+        4 => BlockType::Commits,
+        5 => BlockType::SearchResults,
         _ => BlockType::Default,
     }
 }
@@ -90,7 +97,8 @@ struct Tui {
     search_user: String,
     search_repo: String,
     status_text: String,
-    blocks_n: u8,
+    blocks_on_left: u8,
+    blocks_on_right: u8,
 }
 
 impl Tui {
@@ -99,7 +107,8 @@ impl Tui {
         search_user: String,
         search_repo: String,
         status_text: String,
-        blocks: u8,
+        blocks_on_left: u8,
+        blocks_on_right: u8,
     ) -> Self {
         let repos =
             StatefulList::with_items((&user).git.repos.keys().cloned().collect::<Vec<String>>());
@@ -110,7 +119,8 @@ impl Tui {
             search_user,
             search_repo,
             status_text,
-            blocks_n: blocks,
+            blocks_on_left,
+            blocks_on_right,
         }
     }
 
@@ -128,11 +138,26 @@ impl Tui {
     }
 
     pub fn next_block(&mut self) {
-        self.selected_block = (self.selected_block + 1) % self.blocks_n;
+        if self.selected_block >= self.blocks_on_left {
+            self.selected_block += 1;
+            if self.selected_block == self.blocks_on_left + self.blocks_on_right {
+                self.selected_block = self.blocks_on_left;
+            }
+        } else {
+            self.selected_block = (self.selected_block + 1) % self.blocks_on_left;
+        }
     }
 
     pub fn previous_block(&mut self) {
-        self.selected_block = (self.selected_block + self.blocks_n - 1) % self.blocks_n;
+        if self.selected_block >= self.blocks_on_left {
+            self.selected_block -= 1;
+            if self.selected_block < self.blocks_on_left {
+                self.selected_block = self.blocks_on_left + self.blocks_on_right - 1;
+            }
+        } else {
+            self.selected_block =
+                (self.selected_block + self.blocks_on_left - 1) % self.blocks_on_left;
+        }
     }
 
     fn handle_events(&mut self) -> std::io::Result<bool> {
@@ -170,6 +195,7 @@ impl Tui {
     }
 
     pub fn draw(&mut self, frame: &mut Frame) {
+        let block_highlight_style = Style::new().green();
         let status_area_height = if self.status_text.is_empty() { 2 } else { 3 };
 
         let vertical = Layout::vertical([Min(0)]);
@@ -181,6 +207,10 @@ impl Tui {
             Layout::vertical([Length(6), Min(0), Length(8), Length(status_area_height)]);
         let [profile_area, repos_area, search_area, status_area] = left_vertical.areas(left_area);
 
+        let right_vertical = Layout::vertical([Length(6), Length(6), Length(6)]);
+        let [repo_info_area, commit_list_area, search_result_area] =
+            right_vertical.areas(right_area);
+
         // Selected text highlight
         // Paragraph::new(status_text).block(Block::default())
         //     .bg(ratatui::prelude::Color::LightBlue)
@@ -189,7 +219,7 @@ impl Tui {
             .title(self.user.git.username.clone())
             .border_type(BorderType::Rounded)
             .border_style(if block_type(self.selected_block) == BlockType::Profile {
-                Style::new().blue()
+                block_highlight_style
             } else {
                 Style::default()
             });
@@ -222,7 +252,7 @@ impl Tui {
                     .title("Repos")
                     .border_type(BorderType::Rounded)
                     .border_style(if block_type(self.selected_block) == BlockType::Repos {
-                        Style::new().blue()
+                        block_highlight_style
                     } else {
                         Style::default()
                     }),
@@ -239,7 +269,7 @@ impl Tui {
             .title("Search")
             .border_type(BorderType::Rounded)
             .border_style(if block_type(self.selected_block) == BlockType::Search {
-                Style::new().blue()
+                block_highlight_style
             } else {
                 Style::default()
             });
@@ -279,8 +309,20 @@ impl Tui {
         frame.render_widget(
             Block::bordered()
                 .border_type(BorderType::Rounded)
-                .title("Right"),
-            right_area,
+                .title("Info"),
+            repo_info_area,
+        );
+        frame.render_widget(
+            Block::bordered()
+                .border_type(BorderType::Rounded)
+                .title("Commits"),
+            commit_list_area,
+        );
+        frame.render_widget(
+            Block::bordered()
+                .border_type(BorderType::Rounded)
+                .title("Results"),
+            search_result_area,
         );
     }
 }
