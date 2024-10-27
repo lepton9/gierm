@@ -14,8 +14,8 @@ use Constraint::{Fill, Length, Min};
 pub async fn run_tui(user: crate::git::User) {
     let mut tui = Tui::new(
         user,
-        "Username".to_string(),
-        "Repo name".to_string(),
+        "thePrimeagen".to_string(),
+        "".to_string(),
         "Status text".to_string(),
         3,
         3,
@@ -81,19 +81,58 @@ fn block_type(b_i: u8) -> BlockType {
     }
 }
 
+struct SearchedUser {
+    user: crate::git::GitUser,
+    repo_list_state: StateL,
+    repo_list: Vec<String>,
+    commit_list: StateL,
+    filter: String,
+}
+
+impl SearchedUser {
+    pub fn new(user: crate::git::GitUser, filter: String) -> Self {
+        let repos_state = StateL::new((&user).repos.keys().len());
+        let mut repos: Vec<String> = user
+            .repos
+            .keys()
+            .cloned()
+            .filter(|rn| rn.to_lowercase().contains(&filter.to_lowercase()))
+            .collect();
+        repos.sort_by(|x, y| {
+            user.repos
+                .get(y)
+                .unwrap()
+                .updated_at
+                .cmp(&user.repos.get(x).unwrap().updated_at)
+        });
+        Self {
+            user,
+            repo_list_state: repos_state,
+            repo_list: repos,
+            commit_list: StateL::new(0),
+            filter,
+        }
+    }
+
+    fn selected_repo_name(&self) -> Option<String> {
+        let repo_index = self.repo_list_state.get_selected_index()?;
+        return Some(self.repo_list[repo_index].clone());
+    }
+}
+
 struct Tui {
     user: crate::git::User,
     selected_block: u8,
     repo_list_state: StateL,
     repo_list: Vec<String>,
-    commit_list: StateL, // Can be users or searched users commits
+    commit_list: StateL,
     search_user: String,
     search_repo: String,
     status_text: String,
     blocks_on_left: u8,
     blocks_on_right: u8,
     last_block: Option<u8>,
-    searched_user: Option<crate::git::GitUser>,
+    searched_user: Option<SearchedUser>,
 }
 
 impl Tui {
@@ -224,7 +263,34 @@ impl Tui {
                             self.commit_list.state = ListState::default();
                             self.goto_right();
                         }
-                        BlockType::Search => {}
+                        BlockType::Search => {
+                            if !self.searched_user.is_some() {
+                                let search_result =
+                                    crate::api::search_gituser(&self.user, &self.search_user).await;
+                                self.searched_user = match search_result {
+                                    Some(mut user) => {
+                                        user.repos =
+                                            crate::api::fetch_repos(&self.user, &self.search_user)
+                                                .await;
+
+                                        let found: SearchedUser =
+                                            SearchedUser::new(user, self.search_repo.clone());
+                                        self.status_text = format!(
+                                            "Found {} with {} repos",
+                                            self.search_user,
+                                            found.user.repos.len()
+                                        );
+                                        Some(found)
+                                    }
+                                    None => {
+                                        self.status_text =
+                                            format!("No user named {} found", self.search_user);
+                                        None
+                                    }
+                                };
+                            }
+                            self.goto_right();
+                        }
                         BlockType::Info => {}
                         BlockType::Commits => {
                             if self.repo_list_state.state != ListState::default() {
@@ -411,6 +477,8 @@ impl Tui {
             Paragraph::new(self.status_text.clone()).block(Block::default()),
             status_block.inner(status_area),
         );
+
+        if self.searched_user.is_some() {}
 
         let repo_name = self.selected_repo_name();
         let commit_items: Vec<String>;
