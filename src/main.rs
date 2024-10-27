@@ -22,7 +22,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //     repo.commits = commits;
     // }
 
-    // println!("{:?}", user);
+    println!("{:?}", user);
 
     // if let Some(repo) = user.repos.get(&repo_name) {
     //     for commit in &repo.commits {
@@ -36,7 +36,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //     .unwrap();
     // println!("{:?}", git_user);
 
-    tui::run_tui(user);
+    tui::run_tui(user).await;
 
     return Ok(());
 }

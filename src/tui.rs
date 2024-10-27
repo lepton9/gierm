@@ -8,7 +8,7 @@ use ratatui::{
 };
 use Constraint::{Fill, Length, Min};
 
-pub fn run_tui(user: crate::git::User) {
+pub async fn run_tui(user: crate::git::User) {
     let mut tui = Tui::new(
         user,
         "Username".to_string(),
@@ -17,7 +17,7 @@ pub fn run_tui(user: crate::git::User) {
         3,
         3,
     );
-    tui.run();
+    tui.run().await;
 }
 
 #[derive(Debug, Default)]
@@ -27,7 +27,7 @@ pub struct StatefulList<T> {
 }
 
 impl<T> StatefulList<T> {
-    pub fn with_items(items: Vec<T>) -> Self {
+    pub fn new(items: Vec<T>) -> Self {
         Self {
             state: ListState::default(),
             items,
@@ -35,30 +35,18 @@ impl<T> StatefulList<T> {
     }
 
     pub fn next(&mut self) {
-        let i = match self.state.selected() {
-            Some(i) => {
-                if i >= self.items.len() - 1 {
-                    0
-                } else {
-                    i + 1
-                }
-            }
-            None => 0,
-        };
+        let i = self
+            .state
+            .selected()
+            .map_or(0, |i| (i + 1) % self.items.len());
         self.state.select(Some(i));
     }
 
     pub fn previous(&mut self) {
-        let i = match self.state.selected() {
-            Some(i) => {
-                if i == 0 {
-                    self.items.len() - 1
-                } else {
-                    i - 1
-                }
-            }
-            None => 0,
-        };
+        let i = self
+            .state
+            .selected()
+            .map_or(0, |i| (i + self.items.len() - 1) % self.items.len());
         self.state.select(Some(i));
     }
 
@@ -93,12 +81,14 @@ fn block_type(b_i: u8) -> BlockType {
 struct Tui {
     user: crate::git::User,
     selected_block: u8,
-    repo_list: StatefulList<String>,
+    repo_list: StatefulList<String>, // TODO: keep only the state and use the Vec in User
+    commit_list: StatefulList<String>,
     search_user: String,
     search_repo: String,
     status_text: String,
     blocks_on_left: u8,
     blocks_on_right: u8,
+    searched_user: Option<crate::git::GitUser>,
 }
 
 impl Tui {
@@ -110,27 +100,28 @@ impl Tui {
         blocks_on_left: u8,
         blocks_on_right: u8,
     ) -> Self {
-        let repos =
-            StatefulList::with_items((&user).git.repos.keys().cloned().collect::<Vec<String>>());
+        let repos = StatefulList::new((&user).git.repos.keys().cloned().collect::<Vec<String>>());
         Self {
             user,
             selected_block: 0,
             repo_list: repos,
+            commit_list: StatefulList::new(Vec::new()),
             search_user,
             search_repo,
             status_text,
             blocks_on_left,
             blocks_on_right,
+            searched_user: None,
         }
     }
 
-    fn run(&mut self) {
+    async fn run(&mut self) {
         let mut terminal = ratatui::init();
         loop {
             terminal
                 .draw(|frame| self.draw(frame))
                 .expect("failed to draw frame");
-            if self.handle_events().unwrap() {
+            if self.handle_events().await.unwrap() {
                 break;
             }
         }
@@ -160,17 +151,17 @@ impl Tui {
         }
     }
 
-    fn handle_events(&mut self) -> std::io::Result<bool> {
+    async fn handle_events(&mut self) -> std::io::Result<bool> {
         match event::read()? {
             Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
                 KeyCode::Char('q') => return Ok(true),
                 KeyCode::Up => {
-                    if self.selected_block == 1 {
+                    if block_type(self.selected_block) == BlockType::Repos {
                         self.repo_list.previous();
                     }
                 }
                 KeyCode::Down => {
-                    if self.selected_block == 1 {
+                    if block_type(self.selected_block) == BlockType::Repos {
                         self.repo_list.next();
                     }
                 }
@@ -180,9 +171,31 @@ impl Tui {
                 KeyCode::Right => {
                     self.next_block();
                 }
-                KeyCode::Enter => {
-                    //
-                }
+                KeyCode::Enter => match block_type(self.selected_block) {
+                    BlockType::Profile => {}
+                    BlockType::Repos => {
+                        if self.repo_list.state != ListState::default() {
+                            let repo_name = self
+                                .repo_list
+                                .get_selected()
+                                .expect("No selected repo name");
+
+                            let repo = self.user.git.repos.get(repo_name).unwrap();
+                            let commits: Vec<crate::git::Commit> =
+                                crate::api::fetch_repo_commits(&self.user, &repo).await;
+                            if let Some(repo) = self.user.git.repos.get_mut(repo_name) {
+                                repo.commits = commits;
+                                self.commit_list.items =
+                                    repo.commits.iter().map(|c| c.to_string()).collect();
+                            }
+                        }
+                    }
+                    BlockType::Search => {}
+                    BlockType::Info => {}
+                    BlockType::Commits => {}
+                    BlockType::SearchResults => {}
+                    _ => {}
+                },
                 KeyCode::Esc => {
                     //
                 }
@@ -207,7 +220,7 @@ impl Tui {
             Layout::vertical([Length(6), Min(0), Length(8), Length(status_area_height)]);
         let [profile_area, repos_area, search_area, status_area] = left_vertical.areas(left_area);
 
-        let right_vertical = Layout::vertical([Length(6), Length(6), Length(6)]);
+        let right_vertical = Layout::vertical([Length(10), Min(10), Min(10)]);
         let [repo_info_area, commit_list_area, search_result_area] =
             right_vertical.areas(right_area);
 
@@ -246,7 +259,7 @@ impl Tui {
         let p = Paragraph::new(text);
         frame.render_widget(p, profile_block.inner(profile_area));
 
-        let repos_list = List::new(self.repo_list.items.clone())
+        let repos_list_block = List::new(self.repo_list.items.clone())
             .block(
                 Block::bordered()
                     .title("Repos")
@@ -263,7 +276,7 @@ impl Tui {
             .repeat_highlight_symbol(true)
             .direction(ListDirection::TopToBottom);
 
-        frame.render_stateful_widget(&repos_list, repos_area, &mut self.repo_list.state);
+        frame.render_stateful_widget(&repos_list_block, repos_area, &mut self.repo_list.state);
 
         let search_block = Block::bordered()
             .title("Search")
@@ -312,12 +325,37 @@ impl Tui {
                 .title("Info"),
             repo_info_area,
         );
-        frame.render_widget(
-            Block::bordered()
-                .border_type(BorderType::Rounded)
-                .title("Commits"),
+
+        let commit_list_block = List::new(self.commit_list.items.clone())
+            .block(
+                Block::bordered()
+                    .title("Commits")
+                    .border_type(BorderType::Rounded)
+                    .border_style(if block_type(self.selected_block) == BlockType::Commits {
+                        block_highlight_style
+                    } else {
+                        Style::default()
+                    }),
+            )
+            .style(Style::new().white())
+            .highlight_style(Style::new().italic().blue())
+            .highlight_symbol(">>")
+            .repeat_highlight_symbol(true)
+            .direction(ListDirection::TopToBottom);
+
+        frame.render_stateful_widget(
+            &commit_list_block,
             commit_list_area,
+            &mut self.commit_list.state,
         );
+
+        // frame.render_widget(
+        //     Block::bordered()
+        //         .border_type(BorderType::Rounded)
+        //         .title("Commits"),
+        //     commit_list_area,
+        // );
+
         frame.render_widget(
             Block::bordered()
                 .border_type(BorderType::Rounded)

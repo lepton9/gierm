@@ -125,6 +125,10 @@ impl Commit {
             info: CommitInfo::default(),
         }
     }
+
+    pub fn to_string(&self) -> String {
+        return format!("{} {}", self.message, self.date);
+    }
 }
 
 #[derive(Debug)]
