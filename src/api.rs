@@ -43,7 +43,10 @@ pub async fn fetch_rate(user: &mut git::User) {
 }
 
 pub async fn fetch_repos(user: &git::User, username: &String) -> HashMap<String, git::Repo> {
-    let url = format!("{}/users/{}/repos", API_URL, username);
+    let url = match username.to_lowercase() == user.git.username.to_lowercase() {
+        true => format!("{}/user/repos", API_URL),
+        false => format!("{}/users/{}/repos", API_URL, username),
+    };
     let res = fetch_data(&url, &user).await;
     match res {
         Ok(v) => {
