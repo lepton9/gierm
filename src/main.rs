@@ -4,6 +4,7 @@ mod tui;
 
 struct CLATypeError;
 
+#[derive(Debug)]
 struct CLArgs {
     pub command: Option<String>,
     pub username: Option<String>,
@@ -22,23 +23,41 @@ impl CLArgs {
 
 fn get_cl_args() -> Result<CLArgs, CLATypeError> {
     let args: Vec<String> = std::env::args().collect();
-    let cl_args = CLArgs::new();
+    let mut cl_args = CLArgs::new();
 
-    for (i, arg) in args.iter().skip(1).enumerate() {
+    let mut arg_iter = args.iter().skip(1).peekable();
+    while let Some(arg) = arg_iter.next() {
         match arg.as_str() {
             "-u" | "--user" => {
-                println!("{arg} found");
+                if let Some(a) = arg_iter.peek() {
+                    if !a.starts_with("-") {
+                        if cl_args.username.is_none() {
+                            cl_args.username = Some(a.to_string());
+                        }
+                        arg_iter.next();
+                    }
+                }
             }
             "-r" | "--repo" => {
-                println!("{arg} found");
+                if let Some(a) = arg_iter.peek() {
+                    if !a.starts_with("-") {
+                        if cl_args.repo.is_none() {
+                            cl_args.repo = Some(a.to_string());
+                        }
+                        arg_iter.next();
+                    }
+                }
             }
             "-h" | "--help" => {
                 println!("Print help");
+                // TODO: exit
             }
             _ if arg.starts_with("-") => {
                 println!("Unknown option: {arg}");
+                return Err(CLATypeError);
             }
             _ => {
+                // TODO: check if first arg is a command
                 println!(
                     "{}: '{arg}' is not a gierm command. See 'gierm --help'.",
                     args[0]
@@ -54,8 +73,11 @@ fn get_cl_args() -> Result<CLArgs, CLATypeError> {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args_res = get_cl_args();
     match args_res {
-        Ok(args) => {}
+        Ok(args) => {
+            println!("{:?}", args);
+        }
         Err(e) => {
+            // println!("{:?}", e);
             std::process::exit(0);
         }
     }
