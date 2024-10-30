@@ -11,13 +11,13 @@ use ratatui::{
 };
 use Constraint::{Fill, Length, Min};
 
-struct ListSelector {
+struct FilterList {
     list_state: StateL,
     list: Vec<String>,
     filter: String,
 }
 
-impl ListSelector {
+impl FilterList {
     fn new(list: Vec<String>, filter: String) -> Self {
         Self {
             list_state: StateL::new(list.len()),
@@ -47,11 +47,64 @@ impl ListSelector {
     // }
 }
 
+enum SearchUIMode {
+    Full,
+    Inline,
+}
+
+struct ListSearchTui {
+    list: FilterList,
+    mode: SearchUIMode,
+}
+
+impl ListSearchTui {
+    fn new(list: FilterList) -> Self {
+        Self {
+            list,
+            mode: SearchUIMode::Full,
+        }
+    }
+
+    async fn run(&mut self) {
+        // TODO: inline mode
+        let mut terminal = ratatui::init();
+        loop {
+            terminal
+                .draw(|frame| self.draw(frame))
+                .expect("failed to draw frame");
+            if self.handle_events().await.unwrap() {
+                break;
+            }
+        }
+        ratatui::restore();
+    }
+
+    async fn handle_events(&mut self) -> std::io::Result<bool> {
+        match event::read()? {
+            Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
+                KeyCode::Esc => return Ok(true),
+                KeyCode::Up => {}
+                KeyCode::Down => {}
+                KeyCode::Left => {}
+                KeyCode::Right => {}
+                KeyCode::Enter => {}
+                _ => {}
+            },
+            _ => {}
+        }
+        Ok(false)
+    }
+
+    fn draw(&mut self, frame: &mut Frame) {}
+}
+
 // TODO:
 pub async fn run_list_selector(user: crate::git::User, username: String, filter: String) {
     if let Some(mut git_user) = crate::api::search_gituser(&user, &username).await {
         let all_repos: Vec<String> = git_user.repos.keys().cloned().collect();
-        let mut ls = ListSelector::new(all_repos, filter);
+        let fl = FilterList::new(all_repos, filter);
+        let mut list_tui = ListSearchTui::new(fl);
+        list_tui.run().await;
     }
 }
 
