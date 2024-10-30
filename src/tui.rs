@@ -115,32 +115,43 @@ impl ListSearchTui {
     }
 
     fn draw(&mut self, frame: &mut Frame) {
-        // List, first item at bottom near input box
-        // Input box
-
         let vertical = Layout::vertical([Min(0), Length(1), Length(1)]);
         let [list_area, matches_area, filter_area] = vertical.areas(frame.area());
 
         let filtered_list = self.list.get_filtered();
-        let list_block = List::new(filtered_list.clone())
-            .block(
-                Block::new().title(""), // .border_type(BorderType::Rounded),
-                                        // .border_style(if block_type(self.selected_block) == BlockType::Commits {
-                                        //     block_highlight_style
-                                        // } else {
-                                        //     Style::default()
-                                        // }),
-            )
+        let mut list_items: Vec<ListItem> = Vec::new();
+
+        let mut list_iter = filtered_list.iter();
+        while let Some(item) = list_iter.next() {
+            let filter_start = item.find(&self.list.filter).unwrap_or(0);
+            let (beg, rest) = item.split_at(filter_start);
+            let (mid, end) = rest.split_at(self.list.filter.len());
+            let li = ListItem::new(Text::from(Line::from(vec![
+                Span::styled(beg, Style::default()),
+                Span::styled(mid, Style::new().green()),
+                Span::styled(end, Style::default()),
+            ])));
+            list_items.push(li);
+        }
+
+        let list_block = List::new(list_items)
+            // let list_block = List::new(filtered_list.clone())
+            // .border_type(BorderType::Rounded),
+            // .border_style(if block_type(self.selected_block) == BlockType::Commits {
+            //     block_highlight_style
+            // } else {
+            //     Style::default()
+            // }),
             .style(Style::new().white())
             .highlight_style(Style::new().italic().blue())
-            .highlight_symbol(">")
+            .highlight_symbol("> ")
             .repeat_highlight_symbol(true)
             .direction(ListDirection::BottomToTop);
         // .direction(ListDirection::TopToBottom); // If inline mode, and change up and down
 
         let p_matches = Paragraph::new(Text::from(Line::from(vec![
             Span::styled(
-                format!("{}/{}", filtered_list.len(), self.list.list.len()),
+                format!("  {}/{}", filtered_list.len(), self.list.list.len()),
                 Style::new().light_red(),
             ),
             Span::styled("", Style::default().gray().dim()),
