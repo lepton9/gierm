@@ -11,6 +11,10 @@ use ratatui::{
 };
 use Constraint::{Fill, Length, Min};
 
+pub enum GiermError {
+    NotFoundError,
+}
+
 struct FilterList {
     state: StateL,
     list: Vec<String>,
@@ -65,15 +69,24 @@ enum SearchUIMode {
 
 struct ListSearchTui {
     user: crate::git::User,
+    git_user: Option<crate::git::GitUser>,
     list: FilterList,
+    command: crate::args::Command,
     mode: SearchUIMode,
     // Cursor pos
 }
 
 impl ListSearchTui {
-    fn new(user: crate::git::User, list: FilterList) -> Self {
+    fn new(
+        user: crate::git::User,
+        git_user: Option<crate::git::GitUser>,
+        command: crate::args::Command,
+        list: FilterList,
+    ) -> Self {
         Self {
             user,
+            git_user,
+            command,
             list,
             mode: SearchUIMode::Full,
         }
@@ -184,12 +197,26 @@ impl ListSearchTui {
     }
 }
 
-pub async fn run_list_selector(user: crate::git::User, username: String, filter: String) {
-    if let Some(mut git_user) = crate::api::search_gituser(&user, &username).await {
+pub async fn run_list_selector(
+    user: crate::git::User,
+    username: String,
+    filter: String,
+    command: crate::args::Command,
+) -> Result<(), GiermError> {
+    if username.is_empty() || username == user.git.username {
+        let all_repos: Vec<String> = user.git.repos.keys().cloned().collect();
+        let fl = FilterList::new(all_repos, filter);
+        let mut list_tui = ListSearchTui::new(user, None, command, fl);
+        list_tui.run().await;
+        return Ok(());
+    } else if let Some(mut git_user) = crate::api::search_gituser(&user, &username).await {
         let all_repos: Vec<String> = git_user.repos.keys().cloned().collect();
         let fl = FilterList::new(all_repos, filter);
-        let mut list_tui = ListSearchTui::new(user, fl);
+        let mut list_tui = ListSearchTui::new(user, Some(git_user), command, fl);
         list_tui.run().await;
+        return Ok(());
+    } else {
+        return Err(GiermError::NotFoundError);
     }
 }
 

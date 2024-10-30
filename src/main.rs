@@ -1,102 +1,25 @@
 mod api;
+mod args;
 mod git;
 mod tui;
 
-enum GiermError {
-    CLATypeError,
-    Help,
-}
-
-const COMMANDS: [&str; 1] = ["clone"];
-
-#[derive(Debug)]
-struct CLArgs {
-    pub command: Option<String>,
-    pub username: Option<String>,
-    pub repo: Option<String>,
-}
-
-impl CLArgs {
-    fn new() -> Self {
-        Self {
-            command: None,
-            username: None,
-            repo: None,
-        }
-    }
-}
-
-fn get_cl_args() -> Result<CLArgs, GiermError> {
-    let args: Vec<String> = std::env::args().collect();
-    let mut cl_args = CLArgs::new();
-    let mut arg_iter = args.iter().skip(1).peekable();
-
-    if let Some(a) = arg_iter.peek() {
-        if !a.starts_with("-") {
-            cl_args.command = Some(a.to_string());
-            arg_iter.next();
-
-            if !COMMANDS.contains(&cl_args.command.as_ref().unwrap().as_ref()) {
-                println!(
-                    "{}: '{}' is not a gierm command. See 'gierm --help'.",
-                    args[0],
-                    cl_args.command.unwrap()
-                );
-                return Err(GiermError::CLATypeError);
-            }
-        }
-    }
-
-    while let Some(arg) = arg_iter.next() {
-        match arg.as_str() {
-            "-u" | "--user" => {
-                if let Some(a) = arg_iter.peek() {
-                    if !a.starts_with("-") {
-                        if cl_args.username.is_none() {
-                            cl_args.username = Some(a.to_string());
-                        }
-                        arg_iter.next();
-                    }
-                }
-            }
-            "-r" | "--repo" => {
-                if let Some(a) = arg_iter.peek() {
-                    if !a.starts_with("-") {
-                        if cl_args.repo.is_none() {
-                            cl_args.repo = Some(a.to_string());
-                        }
-                        arg_iter.next();
-                    }
-                }
-            }
-            "-h" | "--help" => {
-                return Err(GiermError::Help);
-            }
-            _ if arg.starts_with("-") => {
-                println!("Unknown option: {arg}");
-                return Err(GiermError::CLATypeError);
-            }
-            _ => {
-                println!(
-                    "{}: '{arg}' is not a gierm command. See 'gierm --help'.",
-                    args[0]
-                );
-                return Err(GiermError::CLATypeError);
-            }
-        }
-    }
-    return Ok(cl_args);
-}
-
-async fn clone(user: git::User, args: &CLArgs) {
+async fn clone(user: git::User, args: &args::CLArgs) {
     if args.username.is_none() || args.username.as_ref().unwrap().clone() == user.git.username {
         println!("Choose your own repo");
+        let res = tui::run_list_selector(
+            user,
+            "".to_string(),
+            args.repo.clone().unwrap_or("".to_string()),
+            args::Command::CLONE,
+        )
+        .await;
     } else {
         println!("Choose repo from user {}", args.username.as_ref().unwrap());
-        tui::run_list_selector(
+        let res = tui::run_list_selector(
             user,
             args.username.clone().unwrap_or("".to_string()),
             args.repo.clone().unwrap_or("".to_string()),
+            args::Command::CLONE,
         )
         .await;
     }
@@ -105,14 +28,14 @@ async fn clone(user: git::User, args: &CLArgs) {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv::dotenv().ok();
-    let args_res = get_cl_args();
-    let args: CLArgs = match args_res {
+    let args_res = args::get_cl_args();
+    let args: args::CLArgs = match args_res {
         Ok(args) => args,
-        Err(GiermError::Help) => {
-            println!("Print help");
+        Err(args::ArgsError::Help) => {
+            args::help();
             return Ok(());
         }
-        Err(GiermError::CLATypeError) => {
+        Err(args::ArgsError::CLATypeError) => {
             println!("Error");
             return Ok(());
         }
@@ -127,8 +50,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     user.git.repos = api::fetch_repos(&user, &user.git.username).await;
 
     if let Some(cmd) = &args.command {
-        match cmd.as_str() {
-            "clone" => {
+        match args::command(cmd) {
+            Some(args::Command::CLONE) => {
                 clone(user, &args).await;
                 return Ok(());
             }
