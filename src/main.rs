@@ -1,12 +1,13 @@
 mod api;
 mod args;
+mod filterlist;
 mod git;
 mod tui;
 
 async fn clone(user: git::User, args: &args::CLArgs) {
     if args.username.is_none() || args.username.as_ref().unwrap().clone() == user.git.username {
         println!("Choose your own repo");
-        let res = tui::run_list_selector(
+        let res = filterlist::run_list_selector(
             user,
             "".to_string(),
             args.repo.clone().unwrap_or("".to_string()),
@@ -15,7 +16,7 @@ async fn clone(user: git::User, args: &args::CLArgs) {
         .await;
     } else {
         println!("Choose repo from user {}", args.username.as_ref().unwrap());
-        let res = tui::run_list_selector(
+        let res = filterlist::run_list_selector(
             user,
             args.username.clone().unwrap_or("".to_string()),
             args.repo.clone().unwrap_or("".to_string()),
