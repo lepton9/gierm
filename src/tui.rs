@@ -11,6 +11,50 @@ use ratatui::{
 };
 use Constraint::{Fill, Length, Min};
 
+struct ListSelector {
+    list_state: StateL,
+    list: Vec<String>,
+    filter: String,
+}
+
+impl ListSelector {
+    fn new(list: Vec<String>, filter: String) -> Self {
+        Self {
+            list_state: StateL::new(list.len()),
+            list,
+            filter,
+        }
+    }
+
+    fn get_filtered(&mut self, filter: String) -> Vec<String> {
+        self.filter = filter.clone();
+        let l: Vec<String> = self
+            .list
+            .clone()
+            .into_iter()
+            .filter(|rn| rn.to_lowercase().contains(&filter.to_lowercase()))
+            .collect();
+        self.list_state.new_size(l.len());
+        return l;
+    }
+
+    // fn set_filtered(&mut self, list: Vec<String>, filter: String) {
+    //     self.list = list
+    //         .into_iter()
+    //         .filter(|rn| rn.to_lowercase().contains(&filter.to_lowercase()))
+    //         .collect();
+    //     self.filter = filter;
+    // }
+}
+
+// TODO:
+pub async fn run_list_selector(user: crate::git::User, username: String, filter: String) {
+    if let Some(mut git_user) = crate::api::search_gituser(&user, &username).await {
+        let all_repos: Vec<String> = git_user.repos.keys().cloned().collect();
+        let mut ls = ListSelector::new(all_repos, filter);
+    }
+}
+
 pub async fn run_tui(user: crate::git::User) {
     let mut tui = Tui::new(
         user,
@@ -53,6 +97,13 @@ impl StateL {
         self.state.select(Some(i));
     }
 
+    pub fn new_size(&mut self, n: usize) {
+        self.items_len = n;
+        if self.items_len < self.get_selected_index().unwrap_or(0) {
+            self.state.select(Some(self.items_len));
+        }
+    }
+
     pub fn get_selected_index(&self) -> Option<usize> {
         return self.state.selected();
     }
@@ -89,6 +140,7 @@ fn block_type_to_u8(block_type: BlockType) -> u8 {
     return block_type as u8;
 }
 
+// TODO: use ListSelector
 struct SearchedUser {
     user: crate::git::GitUser,
     repo_list_state: StateL,

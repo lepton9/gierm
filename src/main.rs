@@ -88,32 +88,48 @@ fn get_cl_args() -> Result<CLArgs, GiermError> {
     return Ok(cl_args);
 }
 
+fn clone(user: &git::User, args: &CLArgs) {
+    if args.username.is_none() || args.username.as_ref().unwrap().clone() == user.git.username {
+        println!("Choose your own repo");
+    } else {
+        println!("Choose repo from user {}", args.username.as_ref().unwrap());
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    dotenv::dotenv().ok();
     let args_res = get_cl_args();
-    match args_res {
-        Ok(args) => {
-            println!("{:?}", args);
-        }
+    let args: CLArgs = match args_res {
+        Ok(args) => args,
         Err(GiermError::Help) => {
             println!("Print help");
-            std::process::exit(0);
+            return Ok(());
         }
         Err(GiermError::CLATypeError) => {
             println!("Error");
-            std::process::exit(0);
+            return Ok(());
         }
-    }
-    // TODO: use args
+    };
+    println!("{:?}", args);
 
-    dotenv::dotenv().ok();
     let gh_access_token = std::env::var("GITHUB_ACCESS_TOKEN").expect("Set GITHUB_ACCESS_TOKEN");
     let username: String = "lepton9".to_string(); // TODO: from env or config
     let mut user: git::User = git::User::new(username, gh_access_token.to_string());
 
-    println!("Fetching data..");
     api::fetch_user(&mut user).await;
     user.git.repos = api::fetch_repos(&user, &user.git.username).await;
+
+    if let Some(cmd) = &args.command {
+        match cmd.as_str() {
+            "clone" => {
+                clone(&user, &args);
+                return Ok(());
+            }
+            _ => {}
+        }
+    }
+    tui::run_tui(user).await;
 
     // let repo_name = "gierm".to_string();
     // let repo = api::fetch_repo(&user, &user.git.username, &repo_name)
@@ -124,7 +140,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //     repo.commits = commits;
     // }
 
-    println!("{:?}", user);
+    // println!("{:?}", user);
 
     // if let Some(repo) = user.repos.get(&repo_name) {
     //     for commit in &repo.commits {
@@ -137,8 +153,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //     .await
     //     .unwrap();
     // println!("{:?}", git_user);
-
-    tui::run_tui(user).await;
 
     return Ok(());
 }
