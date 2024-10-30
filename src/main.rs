@@ -2,7 +2,12 @@ mod api;
 mod git;
 mod tui;
 
-struct CLATypeError;
+enum GiermError {
+    CLATypeError,
+    Help,
+}
+
+const COMMANDS: [&str; 1] = ["clone"];
 
 #[derive(Debug)]
 struct CLArgs {
@@ -21,11 +26,27 @@ impl CLArgs {
     }
 }
 
-fn get_cl_args() -> Result<CLArgs, CLATypeError> {
+fn get_cl_args() -> Result<CLArgs, GiermError> {
     let args: Vec<String> = std::env::args().collect();
     let mut cl_args = CLArgs::new();
-
     let mut arg_iter = args.iter().skip(1).peekable();
+
+    if let Some(a) = arg_iter.peek() {
+        if !a.starts_with("-") {
+            cl_args.command = Some(a.to_string());
+            arg_iter.next();
+
+            if !COMMANDS.contains(&cl_args.command.as_ref().unwrap().as_ref()) {
+                println!(
+                    "{}: '{}' is not a gierm command. See 'gierm --help'.",
+                    args[0],
+                    cl_args.command.unwrap()
+                );
+                return Err(GiermError::CLATypeError);
+            }
+        }
+    }
+
     while let Some(arg) = arg_iter.next() {
         match arg.as_str() {
             "-u" | "--user" => {
@@ -49,20 +70,18 @@ fn get_cl_args() -> Result<CLArgs, CLATypeError> {
                 }
             }
             "-h" | "--help" => {
-                println!("Print help");
-                // TODO: exit
+                return Err(GiermError::Help);
             }
             _ if arg.starts_with("-") => {
                 println!("Unknown option: {arg}");
-                return Err(CLATypeError);
+                return Err(GiermError::CLATypeError);
             }
             _ => {
-                // TODO: check if first arg is a command
                 println!(
                     "{}: '{arg}' is not a gierm command. See 'gierm --help'.",
                     args[0]
                 );
-                return Err(CLATypeError);
+                return Err(GiermError::CLATypeError);
             }
         }
     }
@@ -76,11 +95,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(args) => {
             println!("{:?}", args);
         }
-        Err(e) => {
-            // println!("{:?}", e);
+        Err(GiermError::Help) => {
+            println!("Print help");
+            std::process::exit(0);
+        }
+        Err(GiermError::CLATypeError) => {
+            println!("Error");
             std::process::exit(0);
         }
     }
+    // TODO: use args
 
     dotenv::dotenv().ok();
     let gh_access_token = std::env::var("GITHUB_ACCESS_TOKEN").expect("Set GITHUB_ACCESS_TOKEN");
