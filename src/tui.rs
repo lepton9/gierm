@@ -12,7 +12,7 @@ use ratatui::{
 use Constraint::{Fill, Length, Min};
 
 struct FilterList {
-    list_state: StateL,
+    state: StateL,
     list: Vec<String>,
     filter: String,
 }
@@ -20,22 +20,29 @@ struct FilterList {
 impl FilterList {
     fn new(list: Vec<String>, filter: String) -> Self {
         Self {
-            list_state: StateL::new(list.len()),
+            state: StateL::new(list.len()),
             list,
             filter,
         }
     }
 
-    fn get_filtered(&mut self, filter: String) -> Vec<String> {
-        self.filter = filter.clone();
+    fn get_filtered(&mut self) -> Vec<String> {
         let l: Vec<String> = self
             .list
             .clone()
             .into_iter()
-            .filter(|rn| rn.to_lowercase().contains(&filter.to_lowercase()))
+            .filter(|rn| rn.to_lowercase().contains(&self.filter.to_lowercase()))
             .collect();
-        self.list_state.new_size(l.len());
+        self.state.new_size(l.len());
         return l;
+    }
+
+    fn set_filter(&mut self, filter: String) {
+        self.filter = filter;
+    }
+
+    fn filter_append(&mut self, c: char) {
+        self.filter.push(c);
     }
 
     // fn set_filtered(&mut self, list: Vec<String>, filter: String) {
@@ -53,13 +60,16 @@ enum SearchUIMode {
 }
 
 struct ListSearchTui {
+    user: crate::git::User,
     list: FilterList,
     mode: SearchUIMode,
+    // Cursor pos
 }
 
 impl ListSearchTui {
-    fn new(list: FilterList) -> Self {
+    fn new(user: crate::git::User, list: FilterList) -> Self {
         Self {
+            user,
             list,
             mode: SearchUIMode::Full,
         }
@@ -83,11 +93,15 @@ impl ListSearchTui {
         match event::read()? {
             Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
                 KeyCode::Esc => return Ok(true),
-                KeyCode::Up => {}
-                KeyCode::Down => {}
-                KeyCode::Left => {}
-                KeyCode::Right => {}
-                KeyCode::Enter => {}
+                KeyCode::Up => self.list.state.next(), // move list up
+                KeyCode::Down => self.list.state.previous(), // move list down
+                KeyCode::Left => {}                    // move filter left
+                KeyCode::Right => {}                   // move filter right
+                KeyCode::Enter => {}                   // select item
+                KeyCode::Backspace => {}               // remove char from filter
+                KeyCode::Char(c) => {
+                    self.list.filter_append(c);
+                }
                 _ => {}
             },
             _ => {}
@@ -95,7 +109,10 @@ impl ListSearchTui {
         Ok(false)
     }
 
-    fn draw(&mut self, frame: &mut Frame) {}
+    fn draw(&mut self, frame: &mut Frame) {
+        // List, first item at bottom near input box
+        // Input box
+    }
 }
 
 // TODO:
@@ -103,7 +120,7 @@ pub async fn run_list_selector(user: crate::git::User, username: String, filter:
     if let Some(mut git_user) = crate::api::search_gituser(&user, &username).await {
         let all_repos: Vec<String> = git_user.repos.keys().cloned().collect();
         let fl = FilterList::new(all_repos, filter);
-        let mut list_tui = ListSearchTui::new(fl);
+        let mut list_tui = ListSearchTui::new(user, fl);
         list_tui.run().await;
     }
 }
