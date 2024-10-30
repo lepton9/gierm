@@ -4,8 +4,8 @@ use ratatui::{
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span, Text},
     widgets::{
-        Block, BorderType, Borders, List, ListDirection, ListItem, ListState, Paragraph, Scrollbar,
-        ScrollbarOrientation, ScrollbarState,
+        Block, BorderType, Borders, List, ListDirection, ListItem, ListState, Padding, Paragraph,
+        Scrollbar, ScrollbarOrientation, ScrollbarState,
     },
     Frame,
 };
@@ -135,14 +135,8 @@ impl ListSearchTui {
         }
 
         let list_block = List::new(list_items)
-            // let list_block = List::new(filtered_list.clone())
-            // .border_type(BorderType::Rounded),
-            // .border_style(if block_type(self.selected_block) == BlockType::Commits {
-            //     block_highlight_style
-            // } else {
-            //     Style::default()
-            // }),
-            .style(Style::new().white())
+            .block(Block::new().padding(Padding::left(2)))
+            .style(Style::new())
             .highlight_style(Style::new().italic().blue())
             .highlight_symbol("> ")
             .repeat_highlight_symbol(true)
@@ -162,13 +156,34 @@ impl ListSearchTui {
             Span::styled(self.list.filter.clone(), Style::default()),
         ])));
 
+        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalLeft)
+            .thumb_style(Style::new().gray().dim())
+            .track_symbol(None)
+            .begin_symbol(None)
+            .end_symbol(None);
+        let scrollbar_margin = Margin {
+            vertical: 1,
+            horizontal: 0,
+        };
+        let mut list_scrollbar_state = ScrollbarState::new(filtered_list.len())
+            .position(filtered_list.len() - self.list.state.state.selected().unwrap_or(0));
+
+        if filtered_list.len() > 0 && self.list.state.state == ListState::default() {
+            self.list.state.state.select(Some(0));
+        }
+
         frame.render_stateful_widget(&list_block, list_area, &mut self.list.state.state);
+        frame.render_stateful_widget(
+            scrollbar,
+            list_area.inner(scrollbar_margin),
+            &mut list_scrollbar_state,
+        );
+
         frame.render_widget(p_matches, matches_area);
         frame.render_widget(p_filter, filter_area);
     }
 }
 
-// TODO:
 pub async fn run_list_selector(user: crate::git::User, username: String, filter: String) {
     if let Some(mut git_user) = crate::api::search_gituser(&user, &username).await {
         let all_repos: Vec<String> = git_user.repos.keys().cloned().collect();
