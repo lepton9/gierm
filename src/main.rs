@@ -88,11 +88,17 @@ fn get_cl_args() -> Result<CLArgs, GiermError> {
     return Ok(cl_args);
 }
 
-fn clone(user: &git::User, args: &CLArgs) {
+async fn clone(user: git::User, args: &CLArgs) {
     if args.username.is_none() || args.username.as_ref().unwrap().clone() == user.git.username {
         println!("Choose your own repo");
     } else {
         println!("Choose repo from user {}", args.username.as_ref().unwrap());
+        tui::run_list_selector(
+            user,
+            args.username.clone().unwrap_or("".to_string()),
+            args.repo.clone().unwrap_or("".to_string()),
+        )
+        .await;
     }
 }
 
@@ -123,7 +129,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(cmd) = &args.command {
         match cmd.as_str() {
             "clone" => {
-                clone(&user, &args);
+                clone(user, &args).await;
                 return Ok(());
             }
             _ => {}

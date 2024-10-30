@@ -99,6 +99,7 @@ impl ListSearchTui {
                 KeyCode::Right => {}                   // move filter right
                 KeyCode::Enter => {}                   // select item
                 KeyCode::Backspace => {}               // remove char from filter
+                KeyCode::Tab => {}                     // switch filter mode to search diff user
                 KeyCode::Char(c) => {
                     self.list.filter_append(c);
                 }
@@ -112,6 +113,43 @@ impl ListSearchTui {
     fn draw(&mut self, frame: &mut Frame) {
         // List, first item at bottom near input box
         // Input box
+
+        let vertical = Layout::vertical([Min(0), Length(1), Length(1)]);
+        let [list_area, matches_area, filter_area] = vertical.areas(frame.area());
+
+        let filtered_list = self.list.get_filtered();
+        let list_block = List::new(filtered_list.clone())
+            .block(
+                Block::new().title(""), // .border_type(BorderType::Rounded),
+                                        // .border_style(if block_type(self.selected_block) == BlockType::Commits {
+                                        //     block_highlight_style
+                                        // } else {
+                                        //     Style::default()
+                                        // }),
+            )
+            .style(Style::new().white())
+            .highlight_style(Style::new().italic().blue())
+            .highlight_symbol(">")
+            .repeat_highlight_symbol(true)
+            .direction(ListDirection::BottomToTop);
+        // .direction(ListDirection::TopToBottom); // If inline mode, and change up and down
+
+        let p_matches = Paragraph::new(Text::from(Line::from(vec![
+            Span::styled(
+                format!("{}/{}", filtered_list.len(), self.list.list.len()),
+                Style::new().light_red(),
+            ),
+            Span::styled("", Style::default().gray().dim()),
+        ])));
+
+        let p_filter = Paragraph::new(Text::from(Line::from(vec![
+            Span::styled("> ", Style::new().blue()),
+            Span::styled(self.list.filter.clone(), Style::default()),
+        ])));
+
+        frame.render_stateful_widget(&list_block, list_area, &mut self.list.state.state);
+        frame.render_widget(p_matches, matches_area);
+        frame.render_widget(p_filter, filter_area);
     }
 }
 
