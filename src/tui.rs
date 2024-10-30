@@ -45,6 +45,10 @@ impl FilterList {
         self.filter.push(c);
     }
 
+    fn filter_remove_last(&mut self) {
+        self.filter.pop();
+    }
+
     // fn set_filtered(&mut self, list: Vec<String>, filter: String) {
     //     self.list = list
     //         .into_iter()
@@ -98,7 +102,7 @@ impl ListSearchTui {
                 KeyCode::Left => {}                    // move filter left
                 KeyCode::Right => {}                   // move filter right
                 KeyCode::Enter => {}                   // select item
-                KeyCode::Backspace => {}               // remove char from filter
+                KeyCode::Backspace => self.list.filter_remove_last(), // remove char from filter
                 KeyCode::Tab => {}                     // switch filter mode to search diff user
                 KeyCode::Char(c) => {
                     self.list.filter_append(c);
