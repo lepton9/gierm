@@ -10,10 +10,12 @@ use ratatui::{
     },
     Frame,
 };
+use std::process::Command;
 use Constraint::{Length, Min};
 
 pub enum GiermError {
     NotFoundError,
+    CmdExecError,
 }
 
 struct FilterList {
@@ -93,31 +95,80 @@ impl ListSearchTui {
         }
     }
 
-    async fn run(&mut self) {
+    async fn run(&mut self) -> String {
         // TODO: inline mode
         let mut terminal = ratatui::init();
+        let out: String;
         loop {
             terminal
                 .draw(|frame| self.draw(frame))
                 .expect("failed to draw frame");
-            if self.handle_events().await.unwrap() {
-                break;
+            match self.handle_events().await {
+                Ok((true, msg)) => {
+                    out = msg;
+                    break;
+                }
+                Ok((false, msg)) => {}
+                _ => {}
             }
         }
         ratatui::restore();
+        return out;
     }
 
-    async fn handle_events(&mut self) -> std::io::Result<bool> {
+    fn exec_command(&mut self) -> Result<String, GiermError> {
+        match self.command {
+            crate::args::Command::CLONE => {
+                if let Some(repo_i) = self.list.state.get_selected_index() {
+                    let filtered_list = self.list.get_filtered();
+                    let repo_name = filtered_list
+                        .get(repo_i)
+                        .expect("Index should have an item");
+                    let (user_name, ssh) = match &self.git_user {
+                        Some(u) => (u.username.clone(), false),
+                        None => (self.user.git.username.clone(), true),
+                    };
+                    let url = crate::git::get_clone_url(&user_name, &repo_name, ssh);
+
+                    let output = Command::new("git")
+                        .arg("clone")
+                        .arg(url)
+                        // .arg(".") // Path, TODO: set text box and be able to modify
+                        .output()
+                        .expect("failed to execute process");
+
+                    if output.stderr.is_empty() {
+                        let out: String = String::from_utf8(output.stdout).unwrap();
+                        return Ok(out);
+                    } else {
+                        let err: String = String::from_utf8(output.stderr).unwrap();
+                        return Ok(err);
+                    }
+                    // println!("status: {}", output.status);
+                    // println!("Out: {}", out);
+                    // println!("Err: {}", err);
+                }
+                return Err(GiermError::CmdExecError);
+            }
+            _ => {}
+        }
+        return Err(GiermError::CmdExecError);
+    }
+
+    async fn handle_events(&mut self) -> std::io::Result<(bool, String)> {
         match crossterm::event::read()? {
             Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
-                KeyCode::Esc => return Ok(true),
+                KeyCode::Esc => return Ok((true, "".to_string())),
                 KeyCode::Up => self.list.state.next(), // move list up
                 KeyCode::Down => self.list.state.previous(), // move list down
                 KeyCode::Left => {}                    // move filter left
                 KeyCode::Right => {}                   // move filter right
-                KeyCode::Enter => {}                   // select item
+                KeyCode::Enter => match self.exec_command() {
+                    Ok(msg) => return Ok((true, msg)),
+                    Err(r) => return Ok((true, "".to_string())), // TODO: to_string for errors
+                },
                 KeyCode::Backspace => self.list.filter_remove_last(), // remove char from filter
-                KeyCode::Tab => {}                     // switch filter mode to search diff user
+                KeyCode::Tab => {} // switch filter mode to search diff user
                 KeyCode::Char(c) => {
                     self.list.filter_append(c);
                 }
@@ -125,7 +176,7 @@ impl ListSearchTui {
             },
             _ => {}
         }
-        Ok(false)
+        Ok((false, "".to_string()))
     }
 
     fn draw(&mut self, frame: &mut Frame) {
@@ -208,13 +259,15 @@ pub async fn run_list_selector(
         let all_repos: Vec<String> = user.git.repos.keys().cloned().collect();
         let fl = FilterList::new(all_repos, filter);
         let mut list_tui = ListSearchTui::new(user, None, command, fl);
-        list_tui.run().await;
+        let res = list_tui.run().await;
+        println!("{}", res);
         return Ok(());
     } else if let Some(mut git_user) = crate::api::search_gituser(&user, &username).await {
         let all_repos: Vec<String> = git_user.repos.keys().cloned().collect();
         let fl = FilterList::new(all_repos, filter);
         let mut list_tui = ListSearchTui::new(user, Some(git_user), command, fl);
-        list_tui.run().await;
+        let res = list_tui.run().await;
+        println!("{}", res);
         return Ok(());
     } else {
         return Err(GiermError::NotFoundError);
