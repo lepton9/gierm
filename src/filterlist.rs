@@ -13,6 +13,17 @@ use ratatui::{
 use std::process::Command;
 use Constraint::{Length, Min};
 
+struct Cmd {
+    cmd: String,
+    args: Vec<String>,
+}
+
+impl Cmd {
+    fn new(cmd: String, args: Vec<String>) -> Self {
+        Self { cmd, args }
+    }
+}
+
 pub enum GiermError {
     NotFoundError,
     CmdExecError,
@@ -95,28 +106,28 @@ impl ListSearchTui {
         }
     }
 
-    async fn run(&mut self) -> String {
+    async fn run(&mut self) -> Option<Cmd> {
         // TODO: inline mode
         let mut terminal = ratatui::init();
-        let out: String;
+        let cmd: Option<Cmd>;
         loop {
             terminal
                 .draw(|frame| self.draw(frame))
                 .expect("failed to draw frame");
             match self.handle_events().await {
-                Ok((true, msg)) => {
-                    out = msg;
+                Ok((true, command_opt)) => {
+                    cmd = command_opt;
                     break;
                 }
-                Ok((false, msg)) => {}
+                Ok((false, command)) => {}
                 _ => {}
             }
         }
         ratatui::restore();
-        return out;
+        return cmd;
     }
 
-    fn exec_command(&mut self) -> Result<String, GiermError> {
+    fn get_command(&mut self) -> Option<Cmd> {
         match self.command {
             crate::args::Command::CLONE => {
                 if let Some(repo_i) = self.list.state.get_selected_index() {
@@ -130,43 +141,32 @@ impl ListSearchTui {
                     };
                     let url = crate::git::get_clone_url(&user_name, &repo_name, ssh);
 
-                    let output = Command::new("git")
-                        .arg("clone")
-                        .arg(url)
-                        // .arg(".") // Path, TODO: set text box and be able to modify
-                        .output()
-                        .expect("failed to execute process");
-
-                    if output.stderr.is_empty() {
-                        let out: String = String::from_utf8(output.stdout).unwrap();
-                        return Ok(out);
-                    } else {
-                        let err: String = String::from_utf8(output.stderr).unwrap();
-                        return Ok(err);
-                    }
-                    // println!("status: {}", output.status);
-                    // println!("Out: {}", out);
-                    // println!("Err: {}", err);
+                    // let cmd = Command::new("git").arg("clone").arg(url);
+                    let mut args: Vec<String> = Vec::new();
+                    args.push("clone".to_string());
+                    args.push(url);
+                    let cmd = Cmd::new("git".to_string(), args);
+                    return Some(cmd);
                 }
-                return Err(GiermError::CmdExecError);
+                return None;
             }
-            _ => {}
+            _ => return None,
         }
-        return Err(GiermError::CmdExecError);
     }
 
-    async fn handle_events(&mut self) -> std::io::Result<(bool, String)> {
+    async fn handle_events(&mut self) -> std::io::Result<(bool, Option<Cmd>)> {
         match crossterm::event::read()? {
             Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
-                KeyCode::Esc => return Ok((true, "".to_string())),
+                KeyCode::Esc => return Ok((true, None)),
                 KeyCode::Up => self.list.state.next(), // move list up
                 KeyCode::Down => self.list.state.previous(), // move list down
                 KeyCode::Left => {}                    // move filter left
                 KeyCode::Right => {}                   // move filter right
-                KeyCode::Enter => match self.exec_command() {
-                    Ok(msg) => return Ok((true, msg)),
-                    Err(r) => return Ok((true, "".to_string())), // TODO: to_string for errors
-                },
+                KeyCode::Enter => {
+                    let cmd = self.get_command();
+                    // TODO: ask for confirmation and more args
+                    return Ok((true, cmd));
+                }
                 KeyCode::Backspace => self.list.filter_remove_last(), // remove char from filter
                 KeyCode::Tab => {} // switch filter mode to search diff user
                 KeyCode::Char(c) => {
@@ -176,7 +176,7 @@ impl ListSearchTui {
             },
             _ => {}
         }
-        Ok((false, "".to_string()))
+        Ok((false, None))
     }
 
     fn draw(&mut self, frame: &mut Frame) {
@@ -249,27 +249,57 @@ impl ListSearchTui {
     }
 }
 
+fn exec_command(cmd: Cmd) -> Result<String, GiermError> {
+    let mut command = Command::new(cmd.cmd);
+    for arg in cmd.args.iter() {
+        command.arg(arg);
+    }
+    // .arg(".") // Path, TODO: set text box and be able to modify
+
+    match command.output() {
+        Ok(output) => {
+            if output.stderr.is_empty() {
+                let out: String = String::from_utf8(output.stdout).unwrap();
+                return Ok(out);
+            } else {
+                let err: String = String::from_utf8(output.stderr).unwrap();
+                return Ok(err);
+            }
+        }
+        Err(e) => {
+            // return Err(e);
+            return Err(GiermError::CmdExecError);
+        }
+    }
+}
+
 pub async fn run_list_selector(
     user: crate::git::User,
     username: String,
     filter: String,
     command: crate::args::Command,
 ) -> Result<(), GiermError> {
+    let mut list_tui: ListSearchTui;
     if username.is_empty() || username == user.git.username {
         let all_repos: Vec<String> = user.git.repos.keys().cloned().collect();
         let fl = FilterList::new(all_repos, filter);
-        let mut list_tui = ListSearchTui::new(user, None, command, fl);
-        let res = list_tui.run().await;
-        println!("{}", res);
-        return Ok(());
+        list_tui = ListSearchTui::new(user, None, command, fl);
     } else if let Some(mut git_user) = crate::api::search_gituser(&user, &username).await {
         let all_repos: Vec<String> = git_user.repos.keys().cloned().collect();
         let fl = FilterList::new(all_repos, filter);
-        let mut list_tui = ListSearchTui::new(user, Some(git_user), command, fl);
-        let res = list_tui.run().await;
-        println!("{}", res);
-        return Ok(());
+        list_tui = ListSearchTui::new(user, Some(git_user), command, fl);
     } else {
         return Err(GiermError::NotFoundError);
     }
+
+    let cmd = list_tui.run().await;
+    if let Some(command) = cmd {
+        match exec_command(command) {
+            Ok(out) => {
+                println!("{}", out);
+            }
+            Err(e) => {}
+        }
+    }
+    return Ok(());
 }
