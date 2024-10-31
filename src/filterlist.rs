@@ -22,6 +22,11 @@ impl Cmd {
     fn new(cmd: String, args: Vec<String>) -> Self {
         Self { cmd, args }
     }
+
+    fn to_string(&self) -> String {
+        let cmd_str = format!("{} {}", self.cmd, self.args.join(" "));
+        return cmd_str;
+    }
 }
 
 pub enum GiermError {
@@ -294,6 +299,7 @@ pub async fn run_list_selector(
 
     let cmd = list_tui.run().await;
     if let Some(command) = cmd {
+        println!("gierm: {}", &command.to_string());
         match exec_command(command) {
             Ok(out) => {
                 println!("{}", out);
