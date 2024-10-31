@@ -1,5 +1,10 @@
 use crate::tui::StateL;
+use crossterm::cursor;
 use crossterm::event::{Event, KeyCode, KeyEventKind};
+use crossterm::{
+    cursor::{MoveLeft, MoveRight, RestorePosition, SavePosition},
+    ExecutableCommand,
+};
 use ratatui::{
     layout::{Constraint, Layout, Margin},
     style::{Style, Stylize},
@@ -82,14 +87,6 @@ impl FilterList {
     fn filter_remove_last(&mut self) {
         self.filter.pop();
     }
-
-    // fn set_filtered(&mut self, list: Vec<String>, filter: String) {
-    //     self.list = list
-    //         .into_iter()
-    //         .filter(|rn| rn.to_lowercase().contains(&filter.to_lowercase()))
-    //         .collect();
-    //     self.filter = filter;
-    // }
 }
 
 enum SearchUIMode {
@@ -288,37 +285,59 @@ fn exec_command(cmd: Cmd) -> Result<String, GiermError> {
 }
 
 fn ask_confirmation(prompt: String, input_beg: &String) -> std::io::Result<(bool, String)> {
-    let _ = crossterm::terminal::enable_raw_mode();
+    crossterm::terminal::enable_raw_mode()?;
+    let mut cur_offset: usize = 0;
     let mut input: String = String::default();
     let mut cout = std::io::stdout();
-    write!(&mut cout, "{}", prompt)?;
+    writeln!(&mut cout, "{}", prompt)?;
+    cout.execute(cursor::MoveToColumn(0))?;
+    write!(&mut cout, "{}[2K > {} {}", 27 as char, input_beg, input)?;
+    cout.flush()?;
     loop {
-        write!(&mut cout, "\r{}[2K > {} {}", 27 as char, input_beg, input)?;
-        let _ = cout.flush();
         match crossterm::event::read()? {
             Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
                 KeyCode::Esc => {
-                    let _ = crossterm::terminal::disable_raw_mode();
+                    crossterm::terminal::disable_raw_mode()?;
                     println!();
                     return Ok((false, "".to_string()));
                 }
-                // KeyCode::Left => {}  // move filter left
-                // KeyCode::Right => {} // move filter right
+                KeyCode::Left => {
+                    if cur_offset < input.len() {
+                        cur_offset += 1;
+                        cout.execute(MoveLeft(1))?;
+                    }
+                }
+                KeyCode::Right => {
+                    if cur_offset > 0 {
+                        cur_offset -= 1;
+                        cout.execute(MoveRight(1))?;
+                    }
+                }
                 KeyCode::Enter => {
-                    let _ = crossterm::terminal::disable_raw_mode();
+                    crossterm::terminal::disable_raw_mode()?;
                     println!();
                     return Ok((true, input));
                 }
                 KeyCode::Backspace => {
-                    input.pop();
-                } // remove char from filter
+                    let i: i8 = input.len() as i8 - cur_offset as i8 - 1;
+                    if i >= 0 {
+                        input.remove(i as usize);
+                        cout.execute(MoveLeft(1))?;
+                    }
+                }
                 KeyCode::Char(c) => {
-                    input.push(c);
+                    cout.execute(MoveRight(1))?;
+                    input.insert(input.len() - cur_offset, c);
                 }
                 _ => {}
             },
             _ => {}
         }
+        cout.execute(SavePosition)?;
+        cout.execute(cursor::MoveToColumn(0))?;
+        write!(&mut cout, "{}[2K > {} {}", 27 as char, input_beg, input)?;
+        cout.flush()?;
+        cout.execute(RestorePosition)?;
     }
 }
 
