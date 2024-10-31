@@ -10,9 +10,10 @@ use ratatui::{
     },
     Frame,
 };
-use std::process::Command;
+use std::{io::Write, process::Command};
 use Constraint::{Length, Min};
 
+#[derive(Default)]
 struct Cmd {
     cmd: String,
     args: Vec<String>,
@@ -21,6 +22,16 @@ struct Cmd {
 impl Cmd {
     fn new(cmd: String, args: Vec<String>) -> Self {
         Self { cmd, args }
+    }
+
+    fn from_str(cmd_str: String) -> Option<Self> {
+        let mut parts = cmd_str.split(' ');
+        let cmd = parts.next().map(|s| s.to_string());
+        let args: Vec<String> = parts.map(|s| s.to_string()).collect();
+        if let Some(c) = cmd {
+            return Some(Self { cmd: c, args });
+        }
+        return None;
     }
 
     fn to_string(&self) -> String {
@@ -169,7 +180,6 @@ impl ListSearchTui {
                 KeyCode::Right => {}                   // move filter right
                 KeyCode::Enter => {
                     let cmd = self.get_command();
-                    // TODO: ask for confirmation and more args
                     return Ok((true, cmd));
                 }
                 KeyCode::Backspace => self.list.filter_remove_last(), // remove char from filter
@@ -259,7 +269,6 @@ fn exec_command(cmd: Cmd) -> Result<String, GiermError> {
     for arg in cmd.args.iter() {
         command.arg(arg);
     }
-    // .arg(".") // Path, TODO: set text box and be able to modify
 
     match command.output() {
         Ok(output) => {
@@ -274,6 +283,41 @@ fn exec_command(cmd: Cmd) -> Result<String, GiermError> {
         Err(e) => {
             // return Err(e);
             return Err(GiermError::CmdExecError);
+        }
+    }
+}
+
+fn ask_confirmation(prompt: String, input_beg: &String) -> std::io::Result<(bool, String)> {
+    let _ = crossterm::terminal::enable_raw_mode();
+    let mut input: String = String::default();
+    let mut cout = std::io::stdout();
+    write!(&mut cout, "{}", prompt)?;
+    loop {
+        write!(&mut cout, "\r{}[2K > {} {}", 27 as char, input_beg, input)?;
+        let _ = cout.flush();
+        match crossterm::event::read()? {
+            Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
+                KeyCode::Esc => {
+                    let _ = crossterm::terminal::disable_raw_mode();
+                    println!();
+                    return Ok((false, "".to_string()));
+                }
+                // KeyCode::Left => {}  // move filter left
+                // KeyCode::Right => {} // move filter right
+                KeyCode::Enter => {
+                    let _ = crossterm::terminal::disable_raw_mode();
+                    println!();
+                    return Ok((true, input));
+                }
+                KeyCode::Backspace => {
+                    input.pop();
+                } // remove char from filter
+                KeyCode::Char(c) => {
+                    input.push(c);
+                }
+                _ => {}
+            },
+            _ => {}
         }
     }
 }
@@ -299,12 +343,18 @@ pub async fn run_list_selector(
 
     let cmd = list_tui.run().await;
     if let Some(command) = cmd {
-        println!("gierm: {}", &command.to_string());
-        match exec_command(command) {
-            Ok(out) => {
-                println!("{}", out);
+        let cmd_str = command.to_string();
+        let input_res = ask_confirmation("Enter file path:".to_string(), &cmd_str);
+        match input_res {
+            Ok((true, input)) => {
+                if let Ok(out) = exec_command(
+                    Cmd::from_str(format!("{} {}", cmd_str, input.trim()).trim().to_string())
+                        .unwrap_or_default(),
+                ) {
+                    println!("{}", out);
+                }
             }
-            Err(e) => {}
+            _ => {}
         }
     }
     return Ok(());
