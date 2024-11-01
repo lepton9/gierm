@@ -284,7 +284,7 @@ fn exec_command(cmd: Cmd) -> Result<String, GiermError> {
     }
 }
 
-fn ask_confirmation(prompt: String, input_beg: &String) -> std::io::Result<(bool, String)> {
+pub fn ask_confirmation(prompt: String, input_beg: &String) -> std::io::Result<(bool, String)> {
     crossterm::terminal::enable_raw_mode()?;
     let mut cur_offset: usize = 0;
     let mut input: String = String::default();
