@@ -90,7 +90,7 @@ async fn login_user() -> Option<git::User> {
             ACCESS_TOKEN, CONFIG_FILE
         );
         println!("The config file should be located in '~/' or '~/.config/gierm/'");
-        // TODO : url where to gey the token
+        // TODO : url where to get the token
         return None;
     }
 
@@ -119,9 +119,13 @@ async fn login_user() -> Option<git::User> {
     }
 
     let mut user: git::User = git::User::new(username, password);
-    api::fetch_user(&mut user).await;
-    user.git.repos = api::fetch_repos(&user, &user.git.username).await;
-    return Some(user);
+    match api::fetch_user(&mut user).await {
+        Ok(_) => {
+            user.git.repos = api::fetch_repos(&user, &user.git.username).await;
+            return Some(user);
+        }
+        _ => return None,
+    }
 }
 
 async fn clone(user: git::User, args: &args::CLArgs) {

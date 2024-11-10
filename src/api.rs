@@ -1,20 +1,28 @@
-use crate::git;
+use crate::{filterlist::GiermError, git};
 use std::collections::HashMap;
 
 const API_URL: &str = "https://api.github.com";
 const PER_PAGE: i32 = 100;
 
-pub async fn fetch_user(user: &mut git::User) {
-    let git_user = search_gituser(user, &user.git.username).await;
-    user.git = git_user.unwrap();
-    fetch_rate(user).await;
+pub async fn fetch_user(user: &mut git::User) -> Result<(), GiermError> {
+    let git_user_some = search_gituser(user, &user.git.username).await;
+    if let Some(git_user) = git_user_some {
+        user.git = git_user;
+        fetch_rate(user).await;
+        return Ok(());
+    } else {
+        return Err(GiermError::NotFoundError);
+    }
 }
 
 pub async fn search_gituser(user: &git::User, username: &String) -> Option<git::GitUser> {
     let url = format!("{}/users/{}", API_URL, username);
     let res = fetch_data(&url, &user).await;
     match res {
-        Ok(v) => {
+        Ok((v, s)) => {
+            if s == 404 {
+                return None;
+            }
             let mut git_user = git::GitUser::new(
                 v["login"].to_string().replace("\"", ""),
                 v["name"].to_string().replace("\"", ""),
@@ -33,7 +41,7 @@ pub async fn search_gituser(user: &git::User, username: &String) -> Option<git::
 
 pub async fn fetch_rate(user: &mut git::User) {
     match fetch_data(&format!("{}/rate_limit", API_URL), &user).await {
-        Ok(v) => {
+        Ok((v, _)) => {
             let rate_limit: i32 = v["rate"]["remaining"].as_i64().unwrap_or(0) as i32;
             user.set_ratelimit(rate_limit);
             // println!("Rate remaining: {}", user.rate());
@@ -49,7 +57,7 @@ pub async fn fetch_repos(user: &git::User, username: &String) -> HashMap<String,
     };
     let res = fetch_data(&url, &user).await;
     match res {
-        Ok(v) => {
+        Ok((v, _)) => {
             let mut all_repos: HashMap<String, git::Repo> = HashMap::new();
             if let serde_json::Value::Array(repos) = &v {
                 for (_i, r) in repos.iter().enumerate() {
@@ -81,7 +89,7 @@ pub async fn fetch_repo(
     let url = format!("{}/repos/{}/{}", API_URL, username, repo_name);
     let res = fetch_data(&url, &user).await;
     match res {
-        Ok(r) => {
+        Ok((r, _)) => {
             let repo: git::Repo = git::Repo::new(
                 r["owner"]["login"].to_string().replace("\"", ""),
                 r["name"].to_string().replace("\"", ""),
@@ -103,7 +111,7 @@ pub async fn fetch_repo_commits(user: &git::User, repo: &git::Repo) -> Vec<git::
     let url = format!("{}/repos/{}/{}/commits", API_URL, repo.user, repo.name);
     let res = fetch_data(&url, &user).await;
     match res {
-        Ok(v) => {
+        Ok((v, _)) => {
             let mut repo_commits: Vec<git::Commit> = Vec::new();
             if let serde_json::Value::Array(commits) = v {
                 for (_i, c) in commits.iter().enumerate() {
@@ -137,7 +145,7 @@ pub async fn fetch_commit_info(
     );
     let res = fetch_data(&url, &user).await;
     match res {
-        Ok(v) => {
+        Ok((v, _)) => {
             if let serde_json::Value::Object(info) = v {
                 let total = info["stats"]["total"].as_i64().unwrap_or(0) as i32;
                 let additions = info["stats"]["additions"].as_i64().unwrap_or(0) as i32;
@@ -182,7 +190,7 @@ fn extract_next_url(link_header: &reqwest::header::HeaderValue) -> Option<String
 pub async fn fetch_data(
     url: &str,
     user: &git::User,
-) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+) -> Result<(serde_json::Value, u16), Box<dyn std::error::Error>> {
     // if !user.fetch() {
     //     println!("Error: Rate limit reached");
     //     return Err("Rate limit reached".into());
@@ -191,6 +199,7 @@ pub async fn fetch_data(
     let client = reqwest::Client::new();
     let mut fetch_url = url.to_string();
     let mut data: serde_json::Value = serde_json::Value::Null;
+    let mut status: u16;
 
     loop {
         let mut headers = reqwest::header::HeaderMap::new();
@@ -209,6 +218,7 @@ pub async fn fetch_data(
             .await;
         match res {
             Ok(r) => {
+                status = r.status().as_u16();
                 let link_header = r.headers().get("link").map(|h| h.to_owned());
                 let text = r.text().await?;
                 let body: Result<serde_json::Value, serde_json::Error> =
@@ -246,10 +256,10 @@ pub async fn fetch_data(
                     if let Some(next_url) = extract_next_url(&link_header_value) {
                         fetch_url = next_url;
                     } else {
-                        return Ok(data); // No more pages
+                        return Ok((data, status)); // No more pages
                     }
                 } else {
-                    return Ok(data); // No "Link" header, no more pages
+                    return Ok((data, status)); // No "Link" header, no more pages
                 }
             }
             Err(e) => {
