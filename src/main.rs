@@ -89,8 +89,8 @@ async fn login_user() -> Option<git::User> {
             "Set '{}' as environment variable or as 'password' in {} file.",
             ACCESS_TOKEN, CONFIG_FILE
         );
-        println!("The config file should be located in '~/' or '~/.config/gierm/'");
-        // TODO : url where to get the token
+        println!("The config file should be located in '~/' or '~/.config/gierm/'\n");
+        println!("Get a Github personal access token from 'https://github.com/settings/tokens'");
         return None;
     }
 

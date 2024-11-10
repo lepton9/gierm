@@ -99,10 +99,8 @@ fn block_type_to_u8(block_type: BlockType) -> u8 {
 // TODO: use FilterList
 struct SearchedUser {
     user: crate::git::GitUser,
-    repo_list_state: StateL,
-    repo_list: Vec<String>,
+    repo_list: crate::filterlist::FilterList,
     commit_list: StateL,
-    filter: String,
 }
 
 // TODO: add func to modify filter and update the searched repos
@@ -110,7 +108,6 @@ struct SearchedUser {
 // Only if username field is the same
 impl SearchedUser {
     pub fn new(user: crate::git::GitUser, filter: String) -> Self {
-        let repos_state = StateL::new((&user).repos.keys().len());
         let mut repos: Vec<String> = user
             .repos
             .keys()
@@ -126,16 +123,14 @@ impl SearchedUser {
         });
         Self {
             user,
-            repo_list_state: repos_state,
-            repo_list: repos,
+            repo_list: crate::filterlist::FilterList::new(repos, filter),
             commit_list: StateL::new(0),
-            filter,
         }
     }
 
-    fn selected_repo_name(&self) -> Option<String> {
-        let repo_index = self.repo_list_state.get_selected_index()?;
-        return Some(self.repo_list[repo_index].clone());
+    fn selected_repo_name(&mut self) -> Option<String> {
+        let repo_index = self.repo_list.get_index()?;
+        return Some(self.repo_list.get_filtered()[repo_index].clone());
     }
 }
 

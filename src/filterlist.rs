@@ -50,14 +50,14 @@ pub enum GiermError {
     CmdExecError,
 }
 
-struct FilterList {
+pub struct FilterList {
     state: StateL,
     list: Vec<String>,
     filter: String,
 }
 
 impl FilterList {
-    fn new(list: Vec<String>, filter: String) -> Self {
+    pub fn new(list: Vec<String>, filter: String) -> Self {
         Self {
             state: StateL::new(list.len()),
             list,
@@ -65,7 +65,7 @@ impl FilterList {
         }
     }
 
-    fn get_filtered(&mut self) -> Vec<String> {
+    pub fn get_filtered(&mut self) -> Vec<String> {
         let l: Vec<String> = self
             .list
             .clone()
@@ -76,16 +76,20 @@ impl FilterList {
         return l;
     }
 
-    fn set_filter(&mut self, filter: String) {
+    pub fn set_filter(&mut self, filter: String) {
         self.filter = filter;
     }
 
-    fn filter_append(&mut self, c: char) {
+    pub fn filter_append(&mut self, c: char) {
         self.filter.push(c);
     }
 
-    fn filter_remove_last(&mut self) {
+    pub fn filter_remove_last(&mut self) {
         self.filter.pop();
+    }
+
+    pub fn get_index(&self) -> Option<usize> {
+        return self.state.get_selected_index();
     }
 }
 
