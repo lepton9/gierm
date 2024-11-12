@@ -5,6 +5,7 @@ mod api;
 mod args;
 mod filterlist;
 mod git;
+mod layout;
 mod tui;
 
 const ACCESS_TOKEN: &str = "GITHUB_ACCESS_TOKEN";

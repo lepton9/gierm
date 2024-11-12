@@ -1,3 +1,4 @@
+use crate::layout::*;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
     layout::{Constraint, Layout, Margin},
@@ -63,37 +64,6 @@ impl StateL {
     pub fn get_selected_index(&self) -> Option<usize> {
         return self.state.selected();
     }
-}
-
-#[derive(PartialEq)]
-enum BlockType {
-    Profile,
-    Repos,
-    Search,
-    Info,
-    Commits,
-    SearchResults,
-    SearchUser,
-    SearchRepo,
-    Default,
-}
-
-fn block_type(b_i: u8) -> BlockType {
-    match b_i {
-        0 => BlockType::Profile,
-        1 => BlockType::Repos,
-        2 => BlockType::Search,
-        3 => BlockType::Info,
-        4 => BlockType::Commits,
-        5 => BlockType::SearchResults,
-        6 => BlockType::SearchUser,
-        7 => BlockType::SearchRepo,
-        _ => BlockType::Default,
-    }
-}
-
-fn block_type_to_u8(block_type: BlockType) -> u8 {
-    return block_type as u8;
 }
 
 // TODO: use FilterList
