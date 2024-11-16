@@ -239,20 +239,20 @@ impl Tui {
         match event::read()? {
             Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
                 KeyCode::Char('q') => return Ok(true),
-                KeyCode::Up => match block_type(self.selected_block) {
+                KeyCode::Up | KeyCode::Char('k') => match block_type(self.selected_block) {
                     BlockType::Repos => self.repo_list_state.previous(),
                     BlockType::Commits => self.commit_list.previous(),
                     _ => {}
                 },
-                KeyCode::Down => match block_type(self.selected_block) {
+                KeyCode::Down | KeyCode::Char('j') => match block_type(self.selected_block) {
                     BlockType::Repos => self.repo_list_state.next(),
                     BlockType::Commits => self.commit_list.next(),
                     _ => {}
                 },
-                KeyCode::Left => {
+                KeyCode::Left | KeyCode::Char('h') => {
                     self.previous_block();
                 }
-                KeyCode::Right => {
+                KeyCode::Right | KeyCode::Char('l') => {
                     self.next_block();
                 }
                 KeyCode::Enter => {
