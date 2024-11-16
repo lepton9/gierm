@@ -130,20 +130,46 @@ impl TuiLayout {
         // BlockPos::new(col, len)
     }
 
-    pub fn active_block(&self) -> &TuiBlock {
-        return &self.blocks[self.active.col][self.active.row];
+    pub fn active_block(&mut self) -> &mut TuiBlock {
+        if self.sublayout_active && self.active_sublayout().is_some() {
+            return self.active_sublayout().as_mut().unwrap().active_block();
+        } else {
+            return &mut self.blocks[self.active.col][self.active.row];
+        }
+    }
+
+    pub fn active_sublayout(&mut self) -> &mut Option<TuiLayout> {
+        return &mut self.blocks[self.active.col][self.active.row].sublayout;
     }
 
     pub fn next_block(&mut self) {
-        self.active.row = (self.active.row + 1) % self.blocks[self.active.col].len();
+        match self.sublayout_active {
+            true => {
+                if let Some(sl) = self.active_sublayout() {
+                    sl.next_block();
+                }
+            }
+            false => {
+                self.active.row = (self.active.row + 1) % self.blocks[self.active.col].len();
+            }
+        }
     }
 
     pub fn prev_block(&mut self) {
-        if self.active.row == 0 {
-            self.active.row = self.blocks[self.active.col].len() - 1;
-        } else {
-            self.active.row = (self.active.row - 1 + self.blocks[self.active.col].len())
-                % self.blocks[self.active.col].len();
+        match self.sublayout_active {
+            true => {
+                if let Some(sl) = self.active_sublayout() {
+                    sl.prev_block();
+                }
+            }
+            false => {
+                if self.active.row == 0 {
+                    self.active.row = self.blocks[self.active.col].len() - 1;
+                } else {
+                    self.active.row = (self.active.row - 1 + self.blocks[self.active.col].len())
+                        % self.blocks[self.active.col].len();
+                }
+            }
         }
     }
 
@@ -163,7 +189,11 @@ impl TuiLayout {
         }
     }
 
-    pub fn unselect_layout(&mut self) {
-        self.sublayout_active = false;
+    pub fn unselect_layout(&mut self) -> bool {
+        if self.sublayout_active {
+            self.sublayout_active = false;
+            return true;
+        }
+        return false;
     }
 }

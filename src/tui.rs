@@ -268,7 +268,9 @@ impl Tui {
                             // TODO: goto SearchUser instead to the right
                             // from SearchUser or SearchRepo goto right on enter
                             // self.goto_block(BlockType::SearchUser);
-
+                            self.layout.select_layout();
+                        }
+                        BlockType::SearchUser | BlockType::SearchRepo => {
                             if self.searched_user.is_none()
                                 || self.search_user.to_lowercase()
                                     != self
@@ -303,7 +305,9 @@ impl Tui {
                                     }
                                 };
                             }
-                            self.goto_right();
+                            // self.goto_right();
+                            self.layout.unselect_layout();
+                            self.layout.next_col();
                         }
                         BlockType::Info => {}
                         BlockType::Commits => {
@@ -347,11 +351,13 @@ impl Tui {
                 }
                 KeyCode::Esc => {
                     self.status_text = "".to_string();
-                    if let Some(b) = self.last_block {
-                        self.selected_block = b;
-                        self.last_block = None;
+                    if !self.layout.unselect_layout() {
                         self.layout.prev_col();
                     }
+                    // if let Some(b) = self.last_block {
+                    //     self.selected_block = b;
+                    //     self.last_block = None;
+                    // }
                 }
                 _ => {}
             },
