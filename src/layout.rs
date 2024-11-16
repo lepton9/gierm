@@ -1,4 +1,4 @@
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub enum BlockType {
     Profile,
     Repos,
@@ -29,6 +29,20 @@ pub fn block_type_to_u8(block_type: BlockType) -> u8 {
     return block_type as u8;
 }
 
+pub fn create_test_layout(layout: &mut TuiLayout) {
+    layout.add_col();
+    layout.add_col();
+    layout.add_block(BlockType::Profile, 0);
+    layout.add_block(BlockType::Repos, 0);
+    let sub_lo = layout.add_layout(BlockType::Search, 0);
+    sub_lo.add_col();
+    sub_lo.add_block(BlockType::SearchUser, 0);
+    sub_lo.add_block(BlockType::SearchRepo, 0);
+    layout.add_block(BlockType::Info, 1);
+    layout.add_block(BlockType::Commits, 1);
+    layout.add_block(BlockType::SearchResults, 1);
+}
+
 struct BlockPos {
     col: usize,
     row: usize,
@@ -44,7 +58,7 @@ impl BlockPos {
     }
 }
 
-struct TuiBlock {
+pub struct TuiBlock {
     b_type: BlockType,
     pos: BlockPos,
     sublayout: Option<TuiLayout>,
@@ -58,9 +72,13 @@ impl TuiBlock {
             sublayout: None,
         }
     }
+
+    pub fn block_type(&self) -> BlockType {
+        return self.b_type.clone();
+    }
 }
 
-struct TuiLayout {
+pub struct TuiLayout {
     cols: usize,
     rows: usize,
     blocks: Vec<Vec<TuiBlock>>,
@@ -69,7 +87,7 @@ struct TuiLayout {
 }
 
 impl TuiLayout {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             cols: 0,
             rows: 0, // TODO : Needed?
@@ -79,12 +97,16 @@ impl TuiLayout {
         }
     }
 
-    fn add_col(&mut self) {
+    pub fn print_status(&self) -> String {
+        return format!("Row: {}, Col: {}", self.active.row, self.active.col);
+    }
+
+    pub fn add_col(&mut self) {
         self.blocks.push(Vec::new());
         self.cols += 1;
     }
 
-    fn add_block(&mut self, block_type: BlockType, col: usize) {
+    pub fn add_block(&mut self, block_type: BlockType, col: usize) {
         if col > self.blocks.len() {
             return;
         }
@@ -93,48 +115,55 @@ impl TuiLayout {
         self.blocks[col].push(block);
     }
 
-    fn add_layout(&mut self, block_type: BlockType, col: usize) -> BlockPos {
+    pub fn add_layout(&mut self, block_type: BlockType, col: usize) -> &mut TuiLayout {
         let len = self.blocks[col].len();
         let pos = BlockPos::new(col, len);
         let mut block = TuiBlock::new(block_type, pos);
         block.sublayout = Some(TuiLayout::new());
         self.blocks[col].push(block);
-        BlockPos::new(col, len)
+        return self.blocks[col]
+            .last_mut()
+            .unwrap()
+            .sublayout
+            .as_mut()
+            .unwrap();
+        // BlockPos::new(col, len)
     }
 
-    // TODO: delete
-    fn add_block_deprecated(&mut self, block: TuiBlock, col: usize) {
-        self.blocks[col].push(block);
-    }
-
-    fn active_block(&self) -> &TuiBlock {
+    pub fn active_block(&self) -> &TuiBlock {
         return &self.blocks[self.active.col][self.active.row];
     }
 
-    fn next_block(&mut self) {
+    pub fn next_block(&mut self) {
         self.active.row = (self.active.row + 1) % self.blocks[self.active.col].len();
     }
 
-    fn prev_block(&mut self) {
-        self.active.row = (self.active.row - 1 + self.blocks[self.active.col].len())
-            % self.blocks[self.active.col].len();
+    pub fn prev_block(&mut self) {
+        if self.active.row == 0 {
+            self.active.row = self.blocks[self.active.col].len() - 1;
+        } else {
+            self.active.row = (self.active.row - 1 + self.blocks[self.active.col].len())
+                % self.blocks[self.active.col].len();
+        }
     }
 
-    fn next_col(&mut self) {
+    pub fn next_col(&mut self) {
         self.active.col = (self.active.col + 1) % self.blocks.len();
+        self.active.row = self.active.row % self.blocks[self.active.col].len();
     }
 
-    fn prev_col(&mut self) {
+    pub fn prev_col(&mut self) {
         self.active.col = (self.active.col - 1 + self.blocks.len()) % self.blocks.len();
+        self.active.row = self.active.row % self.blocks[self.active.col].len();
     }
 
-    fn select_layout(&mut self) {
+    pub fn select_layout(&mut self) {
         if self.active_block().sublayout.is_some() {
             self.sublayout_active = true;
         }
     }
 
-    fn unselect_layout(&mut self) {
+    pub fn unselect_layout(&mut self) {
         self.sublayout_active = false;
     }
 }

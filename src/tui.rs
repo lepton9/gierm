@@ -106,6 +106,7 @@ impl SearchedUser {
 
 struct Tui {
     user: crate::git::User,
+    layout: TuiLayout,
     selected_block: u8,
     repo_list_state: StateL,
     repo_list: Vec<String>,
@@ -138,8 +139,11 @@ impl Tui {
                 .updated_at
                 .cmp(&user.git.repos.get(x).unwrap().updated_at)
         });
+        let mut lo = TuiLayout::new();
+        create_test_layout(&mut lo);
         Self {
             user,
+            layout: lo,
             selected_block: 0,
             repo_list_state: repos_state,
             repo_list: repos,
@@ -209,25 +213,30 @@ impl Tui {
         match event::read()? {
             Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
                 KeyCode::Char('q') => return Ok(true),
-                KeyCode::Up => match block_type(self.selected_block) {
+                KeyCode::Up => match self.layout.active_block().block_type() {
+                    // KeyCode::Up => match block_type(self.selected_block) {
                     BlockType::Repos => self.repo_list_state.previous(),
                     BlockType::Commits => self.commit_list.previous(),
                     _ => {}
                 },
-                KeyCode::Down => match block_type(self.selected_block) {
+                KeyCode::Down => match self.layout.active_block().block_type() {
+                    // KeyCode::Down => match block_type(self.selected_block) {
                     BlockType::Repos => self.repo_list_state.next(),
                     BlockType::Commits => self.commit_list.next(),
                     _ => {}
                 },
                 KeyCode::Left => {
+                    self.layout.prev_block();
                     self.previous_block();
                 }
                 KeyCode::Right => {
+                    self.layout.next_block();
                     self.next_block();
                 }
                 KeyCode::Enter => {
                     self.status_text = "".to_string();
-                    match block_type(self.selected_block) {
+                    match self.layout.active_block().block_type() {
+                        // match block_type(self.selected_block) {
                         BlockType::Profile => {}
                         BlockType::Repos => {
                             if self.repo_list_state.state == ListState::default() {
@@ -252,6 +261,7 @@ impl Tui {
                                 }
                                 self.commit_list.state = ListState::default();
                                 self.goto_right();
+                                self.layout.next_col();
                             }
                         }
                         BlockType::Search => {
@@ -340,6 +350,7 @@ impl Tui {
                     if let Some(b) = self.last_block {
                         self.selected_block = b;
                         self.last_block = None;
+                        self.layout.prev_col();
                     }
                 }
                 _ => {}
@@ -369,11 +380,14 @@ impl Tui {
         let profile_block = Block::bordered()
             .title(self.user.git.username.clone())
             .border_type(BorderType::Rounded)
-            .border_style(if block_type(self.selected_block) == BlockType::Profile {
-                block_highlight_style
-            } else {
-                Style::default()
-            });
+            .border_style(
+                if self.layout.active_block().block_type() == BlockType::Profile {
+                    // .border_style(if block_type(self.selected_block) == BlockType::Profile {
+                    block_highlight_style
+                } else {
+                    Style::default()
+                },
+            );
         frame.render_widget(&profile_block, profile_area);
 
         let mut lines = vec![];
@@ -402,11 +416,14 @@ impl Tui {
                 Block::bordered()
                     .title("Repos")
                     .border_type(BorderType::Rounded)
-                    .border_style(if block_type(self.selected_block) == BlockType::Repos {
-                        block_highlight_style
-                    } else {
-                        Style::default()
-                    }),
+                    .border_style(
+                        if self.layout.active_block().block_type() == BlockType::Repos {
+                            // .border_style(if block_type(self.selected_block) == BlockType::Repos {
+                            block_highlight_style
+                        } else {
+                            Style::default()
+                        },
+                    ),
             )
             .style(Style::new().white())
             .highlight_style(Style::new().italic().blue())
@@ -439,16 +456,20 @@ impl Tui {
         let search_block = Block::bordered()
             .title("Search")
             .border_type(BorderType::Rounded)
-            .border_style(if block_type(self.selected_block) == BlockType::Search {
-                block_highlight_style
-            } else {
-                Style::default()
-            });
+            .border_style(
+                if self.layout.active_block().block_type() == BlockType::Search {
+                    // .border_style(if block_type(self.selected_block) == BlockType::Search {
+                    block_highlight_style
+                } else {
+                    Style::default()
+                },
+            );
         let user_search_block = Block::bordered()
             .border_type(BorderType::Rounded)
             .title("User")
             .border_style(
-                if block_type(self.selected_block) == BlockType::SearchUser {
+                if self.layout.active_block().block_type() == BlockType::SearchUser {
+                    // if block_type(self.selected_block) == BlockType::SearchUser {
                     block_highlight_style
                 } else {
                     Style::default()
@@ -458,7 +479,8 @@ impl Tui {
             .border_type(BorderType::Rounded)
             .title("Repo")
             .border_style(
-                if block_type(self.selected_block) == BlockType::SearchRepo {
+                if self.layout.active_block().block_type() == BlockType::SearchRepo {
+                    // if block_type(self.selected_block) == BlockType::SearchRepo {
                     block_highlight_style
                 } else {
                     Style::default()
@@ -480,6 +502,8 @@ impl Tui {
             repo_search_block.inner(repo_search_area),
         );
 
+        // TODO: temp
+        self.status_text = self.layout.print_status();
         let status_block = Block::bordered()
             .title("Status")
             .border_type(BorderType::Rounded);
@@ -532,11 +556,14 @@ impl Tui {
             Block::bordered()
                 .title("Info")
                 .border_type(BorderType::Rounded)
-                .border_style(if block_type(self.selected_block) == BlockType::Info {
-                    block_highlight_style
-                } else {
-                    Style::default()
-                }),
+                .border_style(
+                    if self.layout.active_block().block_type() == BlockType::Info {
+                        // .border_style(if block_type(self.selected_block) == BlockType::Info {
+                        block_highlight_style
+                    } else {
+                        Style::default()
+                    },
+                ),
         );
         frame.render_widget(info_block, info_area);
 
@@ -545,11 +572,14 @@ impl Tui {
                 Block::bordered()
                     .title("Commits")
                     .border_type(BorderType::Rounded)
-                    .border_style(if block_type(self.selected_block) == BlockType::Commits {
-                        block_highlight_style
-                    } else {
-                        Style::default()
-                    }),
+                    .border_style(
+                        if self.layout.active_block().block_type() == BlockType::Commits {
+                            // .border_style(if block_type(self.selected_block) == BlockType::Commits {
+                            block_highlight_style
+                        } else {
+                            Style::default()
+                        },
+                    ),
             )
             .style(Style::new().white())
             .highlight_style(Style::new().italic().blue())
@@ -574,7 +604,8 @@ impl Tui {
             .title("Results")
             .border_type(BorderType::Rounded)
             .border_style(
-                if block_type(self.selected_block) == BlockType::SearchResults {
+                if self.layout.active_block().block_type() == BlockType::SearchResults {
+                    // if block_type(self.selected_block) == BlockType::SearchResults {
                     block_highlight_style
                 } else {
                     Style::default()
