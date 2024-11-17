@@ -24,16 +24,21 @@ pub async fn run_tui(user: crate::git::User) {
 
 fn create_layout(layout: &mut TuiLayout) {
     layout.add_col();
-    layout.add_col();
     layout.add_block(BlockType::Profile, 0);
     layout.add_block(BlockType::Repos, 0);
     let sub_layout = layout.add_layout(BlockType::Search, 0);
     sub_layout.add_col();
     sub_layout.add_block(BlockType::SearchUser, 0);
     sub_layout.add_block(BlockType::SearchRepo, 0);
+    layout.add_col();
     layout.add_block(BlockType::Info, 1);
     layout.add_block(BlockType::Commits, 1);
     layout.add_block(BlockType::SearchResults, 1);
+}
+
+enum Mode {
+    Tui,
+    Input,
 }
 
 #[derive(Debug, Default)]
@@ -78,16 +83,12 @@ impl StateL {
     }
 }
 
-// TODO: use FilterList
 struct SearchedUser {
     user: crate::git::GitUser,
     repo_list: crate::filterlist::FilterList,
     commit_list: StateL,
 }
 
-// TODO: add func to modify filter and update the searched repos
-// instead of fetching the user again
-// Only if username field is the same
 impl SearchedUser {
     pub fn new(user: crate::git::GitUser, filter: String) -> Self {
         let mut repos: Vec<String> = user
@@ -117,6 +118,7 @@ impl SearchedUser {
 }
 
 struct Tui {
+    mode: Mode,
     user: crate::git::User,
     layout: TuiLayout,
     repo_list_state: StateL,
@@ -148,6 +150,7 @@ impl Tui {
         let mut lo = TuiLayout::new();
         create_layout(&mut lo);
         Self {
+            mode: Mode::Tui,
             user,
             layout: lo,
             repo_list_state: repos_state,
@@ -183,41 +186,98 @@ impl Tui {
     }
 
     async fn handle_events(&mut self) -> std::io::Result<bool> {
-        match event::read()? {
-            Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
-                KeyCode::Char('q') => return Ok(true),
-                KeyCode::Up | KeyCode::Char('k') => match self.layout.active_block().block_type() {
-                    BlockType::Repos => self.repo_list_state.previous(),
-                    BlockType::Commits => self.commit_list.previous(),
-                    _ => {}
-                },
-                KeyCode::Down | KeyCode::Char('j') => match self.layout.active_block().block_type()
-                {
-                    BlockType::Repos => self.repo_list_state.next(),
-                    BlockType::Commits => self.commit_list.next(),
-                    _ => {}
-                },
-                KeyCode::Left | KeyCode::Char('h') => {
-                    self.layout.prev_block();
-                }
-                KeyCode::Right | KeyCode::Char('l') => {
-                    self.layout.next_block();
-                }
-                KeyCode::Enter => {
-                    self.set_status("".to_string());
-                    self.handle_enter().await;
-                }
-                KeyCode::Esc => {
-                    self.set_status("".to_string());
-                    if !self.layout.unselect_layout() {
-                        self.layout.prev_col();
-                    }
+        match self.mode {
+            Mode::Tui => match event::read()? {
+                Event::Key(key) if key.kind == KeyEventKind::Press => {
+                    return self.handle_keys_tui(key.code).await;
                 }
                 _ => {}
             },
-            _ => {}
+            Mode::Input => match event::read()? {
+                Event::Key(key) if key.kind == KeyEventKind::Press => {
+                    self.handle_keys_input(key.code).await;
+                }
+                _ => {}
+            },
         }
         Ok(false)
+    }
+
+    async fn handle_keys_tui(&mut self, key_code: KeyCode) -> std::io::Result<bool> {
+        match key_code {
+            KeyCode::Char('q') => return Ok(true),
+            KeyCode::Up | KeyCode::Char('k') => match self.layout.active_block().block_type() {
+                BlockType::Repos => self.repo_list_state.previous(),
+                BlockType::Commits => self.commit_list.previous(),
+                _ => {}
+            },
+            KeyCode::Down | KeyCode::Char('j') => match self.layout.active_block().block_type() {
+                BlockType::Repos => self.repo_list_state.next(),
+                BlockType::Commits => self.commit_list.next(),
+                _ => {}
+            },
+            KeyCode::Left | KeyCode::Char('h') => {
+                self.layout.prev_block();
+            }
+            KeyCode::Right | KeyCode::Char('l') => {
+                self.layout.next_block();
+            }
+            KeyCode::Enter | KeyCode::Tab => {
+                self.set_status("".to_string());
+                self.handle_enter().await;
+            }
+            KeyCode::Char(' ') => match self.layout.active_block().block_type() {
+                BlockType::SearchUser | BlockType::SearchRepo => {
+                    self.mode = Mode::Input;
+                }
+                _ => {}
+            },
+            KeyCode::Esc => {
+                self.set_status("".to_string());
+                if !self.layout.unselect_layout() {
+                    self.layout.prev_col();
+                }
+            }
+            _ => {}
+        }
+        return Ok(false);
+    }
+
+    async fn handle_keys_input(&mut self, key_code: KeyCode) {
+        match key_code {
+            KeyCode::Backspace => match self.layout.active_block().block_type() {
+                BlockType::SearchUser => {
+                    self.search_user.pop();
+                }
+                BlockType::SearchRepo => {
+                    self.search_repo.pop();
+                }
+                _ => {}
+            },
+            KeyCode::Char(c) => match self.layout.active_block().block_type() {
+                BlockType::SearchUser => {
+                    self.search_user.push(c);
+                }
+                BlockType::SearchRepo => {
+                    self.search_repo.push(c);
+                }
+                _ => {}
+            },
+            KeyCode::Left => {
+                self.layout.prev_block();
+            }
+            KeyCode::Right => {
+                self.layout.next_block();
+            }
+            KeyCode::Enter | KeyCode::Tab => {
+                self.mode = Mode::Tui;
+                self.handle_enter().await;
+            }
+            KeyCode::Esc => {
+                self.mode = Mode::Tui;
+            }
+            _ => {}
+        }
     }
 
     async fn handle_enter(&mut self) {
@@ -280,8 +340,10 @@ impl Tui {
                         }
                     };
                 }
-                self.layout.unselect_layout();
-                self.layout.next_col();
+                if self.searched_user.is_some() {
+                    self.layout.unselect_layout();
+                    self.layout.next_col();
+                }
             }
             BlockType::Info => {}
             BlockType::Commits => {
