@@ -29,20 +29,6 @@ pub fn block_type_to_u8(block_type: BlockType) -> u8 {
     return block_type as u8;
 }
 
-pub fn create_test_layout(layout: &mut TuiLayout) {
-    layout.add_col();
-    layout.add_col();
-    layout.add_block(BlockType::Profile, 0);
-    layout.add_block(BlockType::Repos, 0);
-    let sub_lo = layout.add_layout(BlockType::Search, 0);
-    sub_lo.add_col();
-    sub_lo.add_block(BlockType::SearchUser, 0);
-    sub_lo.add_block(BlockType::SearchRepo, 0);
-    layout.add_block(BlockType::Info, 1);
-    layout.add_block(BlockType::Commits, 1);
-    layout.add_block(BlockType::SearchResults, 1);
-}
-
 struct BlockPos {
     col: usize,
     row: usize,
@@ -179,6 +165,9 @@ impl TuiLayout {
     }
 
     pub fn prev_col(&mut self) {
+        if self.active.col == 0 {
+            return;
+        }
         self.active.col = (self.active.col - 1 + self.blocks.len()) % self.blocks.len();
         self.active.row = self.active.row % self.blocks[self.active.col].len();
     }
