@@ -226,12 +226,6 @@ impl Tui {
                 self.set_status("".to_string());
                 self.handle_enter().await;
             }
-            KeyCode::Char(' ') => match self.layout.active_block().block_type() {
-                BlockType::SearchUser | BlockType::SearchRepo => {
-                    self.mode = Mode::Input;
-                }
-                _ => {}
-            },
             KeyCode::Esc => {
                 self.set_status("".to_string());
                 if !self.layout.unselect_layout() {
@@ -270,13 +264,48 @@ impl Tui {
                 self.layout.next_block();
             }
             KeyCode::Enter | KeyCode::Tab => {
-                self.mode = Mode::Tui;
                 self.handle_enter().await;
             }
             KeyCode::Esc => {
                 self.mode = Mode::Tui;
             }
             _ => {}
+        }
+    }
+
+    async fn search(&mut self) {
+        if self.searched_user.is_none()
+            || self.search_user.to_lowercase()
+                != self
+                    .searched_user
+                    .as_ref()
+                    .unwrap()
+                    .user
+                    .username
+                    .to_lowercase()
+        {
+            let search_result = crate::api::search_gituser(&self.user, &self.search_user).await;
+            self.searched_user = match search_result {
+                Some(mut user) => {
+                    user.repos = crate::api::fetch_repos(&self.user, &self.search_user).await;
+
+                    let found: SearchedUser = SearchedUser::new(user, self.search_repo.clone());
+                    self.set_status(format!(
+                        "Found user {} with {} repos",
+                        self.search_user,
+                        found.user.repos.len()
+                    ));
+                    Some(found)
+                }
+                None => {
+                    self.set_status(format!("No user found with '{}'", self.search_user));
+                    None
+                }
+            };
+        }
+        if self.searched_user.is_some() {
+            self.layout.unselect_layout();
+            self.layout.next_col();
         }
     }
 
@@ -307,44 +336,13 @@ impl Tui {
             BlockType::Search => {
                 self.layout.select_layout();
             }
-            BlockType::SearchUser | BlockType::SearchRepo => {
-                if self.searched_user.is_none()
-                    || self.search_user.to_lowercase()
-                        != self
-                            .searched_user
-                            .as_ref()
-                            .unwrap()
-                            .user
-                            .username
-                            .to_lowercase()
-                {
-                    let search_result =
-                        crate::api::search_gituser(&self.user, &self.search_user).await;
-                    self.searched_user = match search_result {
-                        Some(mut user) => {
-                            user.repos =
-                                crate::api::fetch_repos(&self.user, &self.search_user).await;
-
-                            let found: SearchedUser =
-                                SearchedUser::new(user, self.search_repo.clone());
-                            self.set_status(format!(
-                                "Found {} with {} repos",
-                                self.search_user,
-                                found.user.repos.len()
-                            ));
-                            Some(found)
-                        }
-                        None => {
-                            self.set_status(format!("No user named {} found", self.search_user));
-                            None
-                        }
-                    };
+            BlockType::SearchUser | BlockType::SearchRepo => match self.mode {
+                Mode::Input => {
+                    self.search().await;
+                    self.mode = Mode::Tui;
                 }
-                if self.searched_user.is_some() {
-                    self.layout.unselect_layout();
-                    self.layout.next_col();
-                }
-            }
+                _ => self.mode = Mode::Input,
+            },
             BlockType::Info => {}
             BlockType::Commits => {
                 if self.repo_list_state.state != ListState::default() {
@@ -487,7 +485,10 @@ impl Tui {
             .title("User")
             .border_style(
                 if self.layout.active_block().block_type() == BlockType::SearchUser {
-                    block_highlight_style
+                    match self.mode {
+                        Mode::Input => Style::new().blue(),
+                        _ => block_highlight_style,
+                    }
                 } else {
                     Style::default()
                 },
@@ -497,7 +498,10 @@ impl Tui {
             .title("Repo")
             .border_style(
                 if self.layout.active_block().block_type() == BlockType::SearchRepo {
-                    block_highlight_style
+                    match self.mode {
+                        Mode::Input => Style::new().blue(),
+                        _ => block_highlight_style,
+                    }
                 } else {
                     Style::default()
                 },
