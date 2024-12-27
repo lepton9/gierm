@@ -11,6 +11,14 @@ pub enum BlockType {
     Default,
 }
 
+#[derive(PartialEq, Clone)]
+pub enum BlockState {
+    RepoList,
+    CommitList,
+    CommitInfo,
+    Default,
+}
+
 pub fn block_type(b_i: u8) -> BlockType {
     match b_i {
         0 => BlockType::Profile,
@@ -29,9 +37,9 @@ pub fn block_type_to_u8(block_type: BlockType) -> u8 {
     return block_type as u8;
 }
 
-struct BlockPos {
-    col: usize,
-    row: usize,
+pub struct BlockPos {
+    pub col: usize,
+    pub row: usize,
 }
 
 impl BlockPos {
@@ -46,6 +54,7 @@ impl BlockPos {
 
 pub struct TuiBlock {
     b_type: BlockType,
+    state: BlockState,
     pos: BlockPos,
     sublayout: Option<TuiLayout>,
 }
@@ -54,6 +63,7 @@ impl TuiBlock {
     fn new(b_type: BlockType, pos: BlockPos) -> Self {
         Self {
             b_type,
+            state: BlockState::Default,
             pos,
             sublayout: None,
         }
@@ -61,6 +71,14 @@ impl TuiBlock {
 
     pub fn block_type(&self) -> BlockType {
         return self.b_type.clone();
+    }
+
+    pub fn block_state(&self) -> BlockState {
+        return self.state.clone();
+    }
+
+    pub fn set_state(&mut self, state: BlockState) {
+        self.state = state;
     }
 }
 
@@ -113,7 +131,10 @@ impl TuiLayout {
             .sublayout
             .as_mut()
             .unwrap();
-        // BlockPos::new(col, len)
+    }
+
+    pub fn active_block_pos(&self) -> &BlockPos {
+        return &self.active;
     }
 
     pub fn active_block(&mut self) -> &mut TuiBlock {

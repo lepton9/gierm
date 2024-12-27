@@ -22,6 +22,7 @@ pub async fn run_tui(user: crate::git::User) {
     tui.run().await;
 }
 
+// TODO : better layout?
 fn create_layout(layout: &mut TuiLayout) {
     layout.add_col();
     layout.add_block(BlockType::Profile, 0);
@@ -84,7 +85,7 @@ impl StateL {
 }
 
 struct SearchedUser {
-    user: crate::git::GitUser,
+    pub user: crate::git::GitUser,
     repo_list: crate::filterlist::FilterList,
     commit_list: StateL,
 }
@@ -128,6 +129,7 @@ struct Tui {
     search_repo: String,
     status_text: String,
     searched_user: Option<SearchedUser>,
+    show_user_data: bool,
 }
 
 impl Tui {
@@ -160,6 +162,7 @@ impl Tui {
             search_repo,
             status_text,
             searched_user: None,
+            show_user_data: true,
         }
     }
 
@@ -179,6 +182,38 @@ impl Tui {
     fn selected_repo_name(&self) -> Option<String> {
         let repo_index = self.repo_list_state.get_selected_index()?;
         return Some(self.repo_list[repo_index].clone());
+    }
+
+    fn selected_repo_name_su(&mut self) -> Option<String> {
+        let su = self.searched_user.as_mut()?;
+        let repo_index = su.repo_list.get_index()?;
+        let list = su.repo_list.get_filtered();
+        return Some(list.get(repo_index).cloned()?);
+    }
+
+    fn repo_list_prev(&mut self) {
+        if self.show_su_data() {
+            self.searched_user
+                .as_mut()
+                .unwrap()
+                .repo_list
+                .state
+                .previous();
+        } else {
+            self.repo_list_state.previous();
+        }
+    }
+
+    fn repo_list_next(&mut self) {
+        if self.show_su_data() {
+            self.searched_user.as_mut().unwrap().repo_list.state.next();
+        } else {
+            self.repo_list_state.next();
+        }
+    }
+
+    fn show_su_data(&self) -> bool {
+        return self.searched_user.is_some() && !self.show_user_data;
     }
 
     fn set_status(&mut self, status: String) {
@@ -207,12 +242,12 @@ impl Tui {
         match key_code {
             KeyCode::Char('q') => return Ok(true),
             KeyCode::Up | KeyCode::Char('k') => match self.layout.active_block().block_type() {
-                BlockType::Repos => self.repo_list_state.previous(),
+                BlockType::Repos => self.repo_list_prev(),
                 BlockType::Commits => self.commit_list.previous(),
                 _ => {}
             },
             KeyCode::Down | KeyCode::Char('j') => match self.layout.active_block().block_type() {
-                BlockType::Repos => self.repo_list_state.next(),
+                BlockType::Repos => self.repo_list_next(),
                 BlockType::Commits => self.commit_list.next(),
                 _ => {}
             },
@@ -229,7 +264,11 @@ impl Tui {
             KeyCode::Esc => {
                 self.set_status("".to_string());
                 if !self.layout.unselect_layout() {
-                    self.layout.prev_col();
+                    if self.layout.active_block_pos().col == 0 {
+                        self.show_user_data = true;
+                    } else {
+                        self.layout.prev_col();
+                    }
                 }
             }
             _ => {}
@@ -304,6 +343,7 @@ impl Tui {
             };
         }
         if self.searched_user.is_some() {
+            self.show_user_data = false;
             self.layout.unselect_layout();
             self.layout.next_col();
         }
@@ -429,7 +469,39 @@ impl Tui {
         let p = Paragraph::new(text);
         frame.render_widget(p, profile_block.inner(profile_area));
 
-        let repo_list_block = List::new(self.repo_list.clone())
+        let repo_list = match self.show_su_data() {
+            true => self
+                .searched_user
+                .as_mut()
+                .unwrap()
+                .repo_list
+                .get_filtered(),
+            false => self.repo_list.clone(),
+        };
+
+        let mut repo_list_state = match self.show_su_data() {
+            true => self
+                .searched_user
+                .as_mut()
+                .unwrap()
+                .repo_list
+                .state
+                .state
+                .clone(),
+            false => self.repo_list_state.state.clone(),
+        };
+
+        let mut repo_list_scrollbar_state = match self.show_su_data() {
+            true => {
+                let su = self.searched_user.as_ref().unwrap();
+                ScrollbarState::new(su.repo_list.state.items_len)
+                    .position(su.repo_list.get_index().unwrap_or(0))
+            }
+            false => ScrollbarState::new(self.repo_list_state.items_len)
+                .position(self.repo_list_state.state.selected().unwrap_or(0)),
+        };
+
+        let repo_list_block = List::new(repo_list)
             .block(
                 Block::bordered()
                     .title("Repos")
@@ -448,12 +520,6 @@ impl Tui {
             .repeat_highlight_symbol(true)
             .direction(ListDirection::TopToBottom);
 
-        frame.render_stateful_widget(
-            &repo_list_block,
-            repo_list_area,
-            &mut self.repo_list_state.state,
-        );
-
         let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
             .begin_symbol(Some("↑"))
             .end_symbol(Some("↓"));
@@ -462,8 +528,8 @@ impl Tui {
             horizontal: 0,
         };
 
-        let mut repo_list_scrollbar_state = ScrollbarState::new(self.repo_list_state.items_len)
-            .position(self.repo_list_state.state.selected().unwrap_or(0));
+        frame.render_stateful_widget(&repo_list_block, repo_list_area, &mut repo_list_state);
+
         frame.render_stateful_widget(
             scrollbar.clone(),
             repo_list_area.inner(scrollbar_margin),

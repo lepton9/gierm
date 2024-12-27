@@ -51,7 +51,7 @@ pub enum GiermError {
 }
 
 pub struct FilterList {
-    state: StateL,
+    pub state: StateL,
     list: Vec<String>,
     filter: String,
 }
