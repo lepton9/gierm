@@ -359,6 +359,11 @@ impl Tui {
             };
         }
         if self.searched_user.is_some() {
+            self.searched_user
+                .as_mut()
+                .unwrap()
+                .repo_list
+                .set_filter(self.search_repo.clone());
             self.show_user_data = false;
             self.layout.unselect_layout();
             self.layout.next_col();
