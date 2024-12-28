@@ -98,12 +98,7 @@ struct SearchedUser {
 
 impl SearchedUser {
     pub fn new(user: crate::git::GitUser, filter: String) -> Self {
-        let mut repos: Vec<String> = user
-            .repos
-            .keys()
-            .cloned()
-            .filter(|rn| rn.to_lowercase().contains(&filter.to_lowercase()))
-            .collect();
+        let mut repos: Vec<String> = user.repos.keys().cloned().collect();
         repos.sort_by(|x, y| {
             user.repos
                 .get(y)
@@ -117,7 +112,6 @@ impl SearchedUser {
             commit_list: StateL::new(0),
         }
     }
-
     fn selected_repo_name(&mut self) -> Option<String> {
         let repo_index = self.repo_list.get_index()?;
         return Some(self.repo_list.get_filtered()[repo_index].clone());
