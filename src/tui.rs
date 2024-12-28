@@ -57,6 +57,9 @@ impl StateL {
     }
 
     pub fn next(&mut self) {
+        if self.items_len == 0 {
+            return;
+        }
         let i = self
             .state
             .selected()
@@ -65,6 +68,9 @@ impl StateL {
     }
 
     pub fn previous(&mut self) {
+        if self.items_len == 0 {
+            return;
+        }
         let i = self
             .state
             .selected()
@@ -366,7 +372,6 @@ impl Tui {
                 .set_filter(self.search_repo.clone());
             self.show_user_data = false;
             self.layout.unselect_layout();
-            self.layout.next_col();
         }
     }
 
