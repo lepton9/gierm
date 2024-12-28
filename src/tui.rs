@@ -34,7 +34,7 @@ fn create_layout(layout: &mut TuiLayout) {
     layout.add_col();
     layout.add_block(BlockType::Info, 1);
     layout.add_block(BlockType::Commits, 1);
-    layout.add_block(BlockType::SearchResults, 1);
+    layout.add_block(BlockType::CommitInfo, 1);
 }
 
 enum Mode {
@@ -491,7 +491,7 @@ impl Tui {
             },
             BlockType::Info => {}
             BlockType::Commits => self.handle_commit_select().await,
-            BlockType::SearchResults => {}
+            BlockType::CommitInfo => {}
             _ => {}
         }
     }
@@ -511,25 +511,24 @@ impl Tui {
             left_vertical.areas(left_area);
 
         let right_vertical = Layout::vertical([Length(10), Min(10), Min(10)]);
-        let [info_area, commit_list_area, search_result_area] = right_vertical.areas(right_area);
+        let [info_area, commit_list_area, commit_info_area] = right_vertical.areas(right_area);
 
-        let username: String;
-        let name: String;
-        let email: String;
-        let bio: String;
-
-        if self.show_su_data() {
+        let (username, name, email, bio) = if self.show_su_data() {
             let su = self.searched_user.as_ref().unwrap();
-            username = su.user.username.clone();
-            name = su.user.name.clone();
-            email = su.user.email.clone();
-            bio = su.user.bio.clone();
+            (
+                su.user.username.clone(),
+                su.user.name.clone(),
+                su.user.email.clone(),
+                su.user.bio.clone(),
+            )
         } else {
-            username = self.user.git.username.clone();
-            name = self.user.git.name.clone();
-            email = self.user.git.email.clone();
-            bio = self.user.git.bio.clone();
-        }
+            (
+                self.user.git.username.clone(),
+                self.user.git.name.clone(),
+                self.user.git.email.clone(),
+                self.user.git.bio.clone(),
+            )
+        };
 
         let profile_block = Block::bordered()
             .title(username)
@@ -787,16 +786,16 @@ impl Tui {
             &mut commit_list_scrollbar_state,
         );
 
-        let search_result_block = Block::bordered()
-            .title("Results")
+        let commit_info_block = Block::bordered()
+            .title("Commit Info")
             .border_type(BorderType::Rounded)
             .border_style(
-                if self.layout.active_block().block_type() == BlockType::SearchResults {
+                if self.layout.active_block().block_type() == BlockType::CommitInfo {
                     block_highlight_style
                 } else {
                     Style::default()
                 },
             );
-        frame.render_widget(search_result_block, search_result_area);
+        frame.render_widget(commit_info_block, commit_info_area);
     }
 }
