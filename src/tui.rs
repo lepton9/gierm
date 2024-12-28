@@ -212,6 +212,22 @@ impl Tui {
         }
     }
 
+    fn commit_list_prev(&mut self) {
+        if self.show_su_data() {
+            self.searched_user.as_mut().unwrap().commit_list.previous();
+        } else {
+            self.commit_list.previous();
+        }
+    }
+
+    fn commit_list_next(&mut self) {
+        if self.show_su_data() {
+            self.searched_user.as_mut().unwrap().commit_list.next();
+        } else {
+            self.commit_list.next();
+        }
+    }
+
     fn show_su_data(&self) -> bool {
         return self.searched_user.is_some() && !self.show_user_data;
     }
@@ -243,12 +259,12 @@ impl Tui {
             KeyCode::Char('q') => return Ok(true),
             KeyCode::Up | KeyCode::Char('k') => match self.layout.active_block().block_type() {
                 BlockType::Repos => self.repo_list_prev(),
-                BlockType::Commits => self.commit_list.previous(),
+                BlockType::Commits => self.commit_list_prev(),
                 _ => {}
             },
             KeyCode::Down | KeyCode::Char('j') => match self.layout.active_block().block_type() {
                 BlockType::Repos => self.repo_list_next(),
-                BlockType::Commits => self.commit_list.next(),
+                BlockType::Commits => self.commit_list_next(),
                 _ => {}
             },
             KeyCode::Left | KeyCode::Char('h') => {
