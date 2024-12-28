@@ -513,8 +513,26 @@ impl Tui {
         let right_vertical = Layout::vertical([Length(10), Min(10), Min(10)]);
         let [info_area, commit_list_area, search_result_area] = right_vertical.areas(right_area);
 
+        let username: String;
+        let name: String;
+        let email: String;
+        let bio: String;
+
+        if self.show_su_data() {
+            let su = self.searched_user.as_ref().unwrap();
+            username = su.user.username.clone();
+            name = su.user.name.clone();
+            email = su.user.email.clone();
+            bio = su.user.bio.clone();
+        } else {
+            username = self.user.git.username.clone();
+            name = self.user.git.name.clone();
+            email = self.user.git.email.clone();
+            bio = self.user.git.bio.clone();
+        }
+
         let profile_block = Block::bordered()
-            .title(self.user.git.username.clone())
+            .title(username)
             .border_type(BorderType::Rounded)
             .border_style(
                 if self.layout.active_block().block_type() == BlockType::Profile {
@@ -528,15 +546,15 @@ impl Tui {
         let mut lines = vec![];
         lines.push(Line::from(vec![
             Span::styled("Name: ", Style::default()),
-            Span::styled(self.user.git.name.clone(), Style::default()),
+            Span::styled(name, Style::default()),
         ]));
         lines.push(Line::from(vec![
             Span::styled("Email: ", Style::default()),
-            Span::styled(self.user.git.email.clone(), Style::default()),
+            Span::styled(email, Style::default()),
         ]));
         lines.push(Line::from(vec![
             Span::styled("Bio: ", Style::default()),
-            Span::styled(self.user.git.bio.clone(), Style::default()),
+            Span::styled(bio, Style::default()),
         ]));
         lines.push(Line::from(vec![
             Span::styled("Rate remaining: ", Style::default()),
