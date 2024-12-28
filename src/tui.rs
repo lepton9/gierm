@@ -416,6 +416,61 @@ impl Tui {
         }
     }
 
+    async fn handle_commit_select(&mut self) {
+        if self.show_su_data() {
+            let su = self.searched_user.as_mut().unwrap();
+            if su.repo_list.state.state != ListState::default() {
+                if let Some(index) = su.commit_list.get_selected_index() {
+                    let username = su.user.username.clone();
+                    let repo_name = su.selected_repo_name().unwrap();
+                    let repo = su.user.repos.get(&repo_name.clone()).unwrap();
+                    let commit = repo.commits.get(index).map(|commit| commit).unwrap();
+                    if !commit.info.is_some() {
+                        let commit_info = crate::api::fetch_commit_info(
+                            &self.user,
+                            username,
+                            repo_name.clone(),
+                            commit.sha.clone(),
+                        )
+                        .await;
+                        if let Some(repo) = su.user.repos.get_mut(&repo_name) {
+                            if let Some(commit) = repo.commits.get_mut(index) {
+                                commit.info = Some(commit_info);
+                                self.status_text =
+                                    format!("Fetched commit info for {}", commit.sha_short());
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            if self.repo_list_state.state != ListState::default() {
+                if let Some(index) = self.commit_list.get_selected_index() {
+                    let username = &self.user.git.username;
+                    let repo_name = self.selected_repo_name().unwrap();
+                    let repo = self.user.git.repos.get(&repo_name.clone()).unwrap();
+                    let commit = repo.commits.get(index).map(|commit| commit).unwrap();
+                    if !commit.info.is_some() {
+                        let commit_info = crate::api::fetch_commit_info(
+                            &self.user,
+                            username.clone(),
+                            repo_name.clone(),
+                            commit.sha.clone(),
+                        )
+                        .await;
+                        if let Some(repo) = self.user.git.repos.get_mut(&repo_name) {
+                            if let Some(commit) = repo.commits.get_mut(index) {
+                                commit.info = Some(commit_info);
+                                self.status_text =
+                                    format!("Fetched commit info for {}", commit.sha_short());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     async fn handle_enter(&mut self) {
         match self.layout.active_block().block_type() {
             BlockType::Profile => {}
@@ -431,36 +486,7 @@ impl Tui {
                 _ => self.mode = Mode::Input,
             },
             BlockType::Info => {}
-            BlockType::Commits => {
-                if self.repo_list_state.state != ListState::default() {
-                    if let Some(index) = self.commit_list.get_selected_index() {
-                        let username = &self.user.git.username;
-                        let repo_name = self.selected_repo_name().unwrap();
-                        let repo = self.user.git.repos.get(&repo_name.clone()).unwrap();
-                        let commit = repo.commits.get(index).map(|commit| commit).unwrap();
-                        if !commit.info.is_some() {
-                            let commit_info = crate::api::fetch_commit_info(
-                                &self.user,
-                                username.clone(),
-                                repo_name.clone(),
-                                commit.sha.clone(),
-                            )
-                            .await;
-                            {
-                                if let Some(repo) = self.user.git.repos.get_mut(&repo_name) {
-                                    if let Some(commit) = repo.commits.get_mut(index) {
-                                        commit.info = Some(commit_info);
-                                        self.status_text = format!(
-                                            "Fetched commit info for {}",
-                                            commit.sha_short()
-                                        );
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            BlockType::Commits => self.handle_commit_select().await,
             BlockType::SearchResults => {}
             _ => {}
         }
