@@ -349,30 +349,61 @@ impl Tui {
         }
     }
 
+    // TODO: show status message when fetching data
+    async fn handle_repo_select(&mut self) {
+        if self.show_su_data() {
+            let su = self.searched_user.as_mut().unwrap();
+            if su.repo_list.state.state == ListState::default() {
+                su.repo_list.state.next();
+            } else {
+                let repo_name = su
+                    .selected_repo_name()
+                    .expect("Expected repo index")
+                    .clone();
+                let repo = su.user.repos.get(&repo_name).unwrap();
+                if repo.commits.is_empty() {
+                    let commits: Vec<crate::git::Commit> =
+                        crate::api::fetch_repo_commits(&self.user, &repo).await;
+                    if let Some(repo) = su.user.repos.get_mut(&repo.name.clone()) {
+                        repo.commits = commits;
+                        su.commit_list.items_len = repo.commits.len();
+                    }
+                    let items_len = su.commit_list.items_len;
+                    su.commit_list.state = ListState::default();
+                    self.set_status(format!("Fetched {} commits", items_len));
+                } else {
+                    su.commit_list.items_len = repo.commits.len();
+                    su.commit_list.state = ListState::default();
+                }
+                self.layout.next_col();
+            }
+        } else {
+            if self.repo_list_state.state == ListState::default() {
+                self.repo_list_state.next();
+            } else {
+                let repo_name = self.selected_repo_name().expect("Expected repo index");
+                let repo = self.user.git.repos.get(&repo_name).unwrap();
+                if repo.commits.is_empty() {
+                    let commits: Vec<crate::git::Commit> =
+                        crate::api::fetch_repo_commits(&self.user, &repo).await;
+                    if let Some(repo) = self.user.git.repos.get_mut(&repo.name.clone()) {
+                        repo.commits = commits;
+                        self.commit_list.items_len = repo.commits.len();
+                    }
+                    self.set_status(format!("Fetched {} commits", self.commit_list.items_len));
+                } else {
+                    self.commit_list.items_len = repo.commits.len();
+                }
+                self.commit_list.state = ListState::default();
+                self.layout.next_col();
+            }
+        }
+    }
+
     async fn handle_enter(&mut self) {
         match self.layout.active_block().block_type() {
             BlockType::Profile => {}
-            BlockType::Repos => {
-                if self.repo_list_state.state == ListState::default() {
-                    self.repo_list_state.next();
-                } else {
-                    let repo_name = self.selected_repo_name().expect("Expected repo index");
-                    let repo = self.user.git.repos.get(&repo_name).unwrap();
-                    if repo.commits.is_empty() {
-                        let commits: Vec<crate::git::Commit> =
-                            crate::api::fetch_repo_commits(&self.user, &repo).await;
-                        if let Some(repo) = self.user.git.repos.get_mut(&repo.name.clone()) {
-                            repo.commits = commits;
-                            self.commit_list.items_len = repo.commits.len();
-                        }
-                        self.set_status(format!("Fetched {} commits", self.commit_list.items_len));
-                    } else {
-                        self.commit_list.items_len = repo.commits.len();
-                    }
-                    self.commit_list.state = ListState::default();
-                    self.layout.next_col();
-                }
-            }
+            BlockType::Repos => self.handle_repo_select().await,
             BlockType::Search => {
                 self.layout.select_layout();
             }
@@ -597,18 +628,35 @@ impl Tui {
             status_block.inner(status_area),
         );
 
-        // TODO: show searched user repos and info
-        if self.searched_user.is_some() {}
+        let mut info_lines: Vec<Line<'_>> = vec![];
+        let repo_name: Option<String>;
+        let repo: &crate::git::Repo;
+        let mut commit_list_items: Vec<String> = vec![];
+        let mut commit_list_scrollbar_state: ScrollbarState = ScrollbarState::default();
+        let mut commit_list_state = ListState::default();
 
-        let repo_name = self.selected_repo_name();
-        let commit_items: Vec<String>;
-        let mut info_lines = vec![];
+        if self.show_su_data() {
+            repo_name = self.selected_repo_name_su().clone();
+        } else {
+            repo_name = self.selected_repo_name().clone();
+        }
         match repo_name {
             Some(name) => {
-                // TODO: selected repo can also be a searched user's repo
-                let repo = self.user.git.repos.get(&name).unwrap();
-                // TODO: different printing
-                commit_items = repo.commits.iter().map(|c| c.to_string()).collect();
+                if self.show_su_data() {
+                    let su = self.searched_user.as_ref().unwrap();
+                    repo = su.user.repos.get(&name).unwrap();
+                    commit_list_items = repo.commits.iter().map(|c| c.to_string()).collect();
+                    commit_list_state = su.commit_list.state.clone();
+                    commit_list_scrollbar_state = ScrollbarState::new(su.commit_list.items_len)
+                        .position(self.commit_list.state.selected().unwrap_or(0));
+                } else {
+                    repo = self.user.git.repos.get(&name).unwrap();
+                    commit_list_items = repo.commits.iter().map(|c| c.to_string()).collect();
+                    commit_list_state = self.commit_list.state.clone();
+                    commit_list_scrollbar_state = ScrollbarState::new(self.commit_list.items_len)
+                        .position(self.commit_list.state.selected().unwrap_or(0));
+                }
+
                 info_lines.push(Line::from(vec![Span::styled(
                     repo.name.clone(),
                     Style::default(),
@@ -630,10 +678,8 @@ impl Tui {
                     Span::styled(repo.commits.len().to_string(), Style::default()),
                 ]));
             }
-            None => {
-                commit_items = Vec::new();
-            }
-        };
+            _ => {}
+        }
 
         let text = Text::from(info_lines);
         let info_block = Paragraph::new(text).block(
@@ -650,7 +696,7 @@ impl Tui {
         );
         frame.render_widget(info_block, info_area);
 
-        let commit_list_block = List::new(commit_items)
+        let commit_list_block = List::new(commit_list_items)
             .block(
                 Block::bordered()
                     .title("Commits")
@@ -668,14 +714,9 @@ impl Tui {
             .highlight_symbol("")
             .repeat_highlight_symbol(true)
             .direction(ListDirection::TopToBottom);
-        frame.render_stateful_widget(
-            &commit_list_block,
-            commit_list_area,
-            &mut self.commit_list.state,
-        );
 
-        let mut commit_list_scrollbar_state = ScrollbarState::new(self.commit_list.items_len)
-            .position(self.commit_list.state.selected().unwrap_or(0));
+        frame.render_stateful_widget(&commit_list_block, commit_list_area, &mut commit_list_state);
+
         frame.render_stateful_widget(
             scrollbar,
             commit_list_area.inner(scrollbar_margin),
