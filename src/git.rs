@@ -127,7 +127,12 @@ impl Commit {
     }
 
     pub fn to_string(&self) -> String {
-        return format!("{} {}", self.date, self.message);
+        return format!("{} {}", self.date, self.message_short());
+    }
+
+    pub fn message_short(&self) -> String {
+        let i_nl = self.message.find("\\n\\n").unwrap_or(self.message.len());
+        return self.message.chars().into_iter().take(i_nl).collect();
     }
 
     pub fn sha_short(&self) -> String {
