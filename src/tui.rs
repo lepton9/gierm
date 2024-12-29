@@ -230,21 +230,22 @@ impl Tui {
 
     fn repo_list_prev(&mut self) {
         if self.show_su_data() {
-            self.searched_user
-                .as_mut()
-                .unwrap()
-                .repo_list
-                .state
-                .previous();
+            let su = self.searched_user.as_mut().unwrap();
+            su.repo_list.state.previous();
+            su.commit_list.state = ListState::default();
         } else {
+            self.commit_list.state = ListState::default();
             self.repo_list_state.previous();
         }
     }
 
     fn repo_list_next(&mut self) {
         if self.show_su_data() {
-            self.searched_user.as_mut().unwrap().repo_list.state.next();
+            let su = self.searched_user.as_mut().unwrap();
+            su.repo_list.state.next();
+            su.commit_list.state = ListState::default();
         } else {
+            self.commit_list.state = ListState::default();
             self.repo_list_state.next();
         }
     }
@@ -749,9 +750,8 @@ impl Tui {
                     commit_list_items = repo.commits.iter().map(|c| c.to_string()).collect();
                     commit_list_state = su.commit_list.state.clone();
                     commit_list_scrollbar_state = ScrollbarState::new(su.commit_list.items_len)
-                        .position(self.commit_list.state.selected().unwrap_or(0));
+                        .position(self.commit_list.get_selected_index().unwrap_or(0));
 
-                    // TODO:
                     let commit_i = su.commit_list.get_selected_index();
                     if let Some(index) = commit_i {
                         let commit = repo.commits.get(index).map(|c| c).unwrap();
@@ -762,11 +762,10 @@ impl Tui {
                     commit_list_items = repo.commits.iter().map(|c| c.to_string()).collect();
                     commit_list_state = self.commit_list.state.clone();
                     commit_list_scrollbar_state = ScrollbarState::new(self.commit_list.items_len)
-                        .position(self.commit_list.state.selected().unwrap_or(0));
+                        .position(self.commit_list.get_selected_index().unwrap_or(0));
 
                     let commit_i = self.commit_list.get_selected_index();
                     if let Some(index) = commit_i {
-                        // TODO: crash, unwrap none
                         let commit = repo.commits.get(index).map(|c| c).unwrap();
                         commit_info_lines = commit_info_text(commit);
                     }
