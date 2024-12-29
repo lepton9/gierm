@@ -37,6 +37,39 @@ fn create_layout(layout: &mut TuiLayout) {
     layout.add_block(BlockType::CommitInfo, 1);
 }
 
+fn commit_info_text(commit: &crate::git::Commit) -> Vec<Line<'_>> {
+    let mut commit_info_lines: Vec<Line<'_>> = vec![];
+    commit_info_lines.push(Line::from(vec![Span::styled(
+        "commit ".to_string() + &commit.sha.to_string(),
+        Style::default(),
+    )]));
+    commit_info_lines.push(Line::from(vec![Span::styled(
+        "Author: ".to_string() + &commit.committer,
+        Style::default(),
+    )]));
+    commit_info_lines.push(Line::from(vec![Span::styled(
+        "Date: ".to_string() + &commit.date.to_string(),
+        Style::default(),
+    )]));
+    commit_info_lines.push(Line::default());
+    commit_info_lines.push(Line::from(vec![Span::styled(
+        commit.message.to_string(),
+        Style::default(),
+    )]));
+    if let Some(info) = &commit.info {
+        let total_changes = info.total_changes.to_string();
+        let additions = info.additions.to_string();
+        let deletions = info.deletions.to_string();
+        let files_len = info.files.len().to_string();
+        commit_info_lines.push(Line::from(vec![
+            Span::styled(files_len + " files changed, ", Style::default()),
+            Span::styled(additions + " insertions(+), ", Style::default()),
+            Span::styled(deletions + " deletions(-)", Style::default()),
+        ]));
+    }
+    return commit_info_lines;
+}
+
 enum Mode {
     Tui,
     Input,
@@ -692,6 +725,7 @@ impl Tui {
         );
 
         let mut info_lines: Vec<Line<'_>> = vec![];
+        let mut commit_info_lines: Vec<Line<'_>> = vec![];
         let repo_name: Option<String>;
         let repo: &crate::git::Repo;
         let mut commit_list_items: Vec<String> = vec![];
@@ -704,20 +738,34 @@ impl Tui {
             repo_name = self.selected_repo_name().clone();
         }
         match repo_name {
-            Some(name) => {
+            Some(r_name) => {
                 if self.show_su_data() {
                     let su = self.searched_user.as_ref().unwrap();
-                    repo = su.user.repos.get(&name).unwrap();
+                    repo = su.user.repos.get(&r_name).unwrap();
                     commit_list_items = repo.commits.iter().map(|c| c.to_string()).collect();
                     commit_list_state = su.commit_list.state.clone();
                     commit_list_scrollbar_state = ScrollbarState::new(su.commit_list.items_len)
                         .position(self.commit_list.state.selected().unwrap_or(0));
+
+                    // TODO:
+                    let commit_i = su.commit_list.get_selected_index();
+                    if let Some(index) = commit_i {
+                        let commit = repo.commits.get(index).map(|c| c).unwrap();
+                        commit_info_lines = commit_info_text(commit);
+                    }
                 } else {
-                    repo = self.user.git.repos.get(&name).unwrap();
+                    repo = self.user.git.repos.get(&r_name).unwrap();
                     commit_list_items = repo.commits.iter().map(|c| c.to_string()).collect();
                     commit_list_state = self.commit_list.state.clone();
                     commit_list_scrollbar_state = ScrollbarState::new(self.commit_list.items_len)
                         .position(self.commit_list.state.selected().unwrap_or(0));
+
+                    let commit_i = self.commit_list.get_selected_index();
+                    if let Some(index) = commit_i {
+                        // TODO: crash, unwrap none
+                        let commit = repo.commits.get(index).map(|c| c).unwrap();
+                        commit_info_lines = commit_info_text(commit);
+                    }
                 }
 
                 info_lines.push(Line::from(vec![Span::styled(
@@ -786,7 +834,10 @@ impl Tui {
             &mut commit_list_scrollbar_state,
         );
 
-        let commit_info_block = Block::bordered()
+        let commit_info_block = Paragraph::new(Text::from(commit_info_lines))
+            .block(Block::default().padding(Padding::uniform(1)));
+
+        let patch_block = Block::bordered()
             .title("Commit Info")
             .border_type(BorderType::Rounded)
             .border_style(
@@ -796,6 +847,7 @@ impl Tui {
                     Style::default()
                 },
             );
+        frame.render_widget(patch_block, commit_info_area);
         frame.render_widget(commit_info_block, commit_info_area);
     }
 }
