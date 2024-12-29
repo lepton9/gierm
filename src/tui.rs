@@ -53,7 +53,11 @@ fn commit_info_text(commit: &crate::git::Commit) -> Vec<Line<'_>> {
     )]));
     commit_info_lines.push(Line::default());
     commit_info_lines.push(Line::from(vec![Span::styled(
-        commit.message.to_string(),
+        commit.message_short(),
+        Style::default(),
+    )]));
+    commit_info_lines.push(Line::from(vec![Span::styled(
+        commit.description(),
         Style::default(),
     )]));
     if let Some(info) = &commit.info {

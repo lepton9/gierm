@@ -135,6 +135,16 @@ impl Commit {
         return self.message.chars().into_iter().take(i_nl).collect();
     }
 
+    pub fn description(&self) -> String {
+        let len = "\\n\\n".len();
+        match self.message.find("\\n\\n") {
+            Some(i) => {
+                return self.message[i + len..].to_string();
+            }
+            _ => return "".to_string(),
+        }
+    }
+
     pub fn sha_short(&self) -> String {
         return self.sha.chars().into_iter().take(8).collect();
     }
