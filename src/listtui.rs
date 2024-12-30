@@ -8,7 +8,7 @@ use crossterm::{
     ExecutableCommand,
 };
 use ratatui::{
-    layout::{Constraint, Layout, Margin},
+    layout::{Constraint, Layout, Margin, Position},
     style::{Style, Stylize},
     text::{Line, Span, Text},
     widgets::{
@@ -70,6 +70,7 @@ struct ListSearchTui {
     command: crate::args::Command,
     mode: ListTuiMode,
     input_mode: InputMode,
+    cursor_offset: usize,
     // Cursor pos
 }
 
@@ -89,6 +90,7 @@ impl ListSearchTui {
             list,
             mode: ListTuiMode::Full,
             input_mode: InputMode::Repo,
+            cursor_offset: 0,
         }
     }
 
@@ -142,7 +144,8 @@ impl ListSearchTui {
 
     fn changed_username(&self) -> bool {
         if let Some(u) = &self.git_user {
-            return self.searched_username.to_lowercase() != u.username.to_lowercase();
+            return self.searched_username.to_lowercase().trim()
+                != u.username.to_lowercase().trim();
         } else {
             return true;
         }
@@ -157,6 +160,7 @@ impl ListSearchTui {
             }
             _ => {
                 let all_repos: Vec<String> = self.user.git.repos.keys().cloned().collect();
+                self.searched_username.clear();
                 self.list.set_list(all_repos);
                 self.git_user = None;
             }
@@ -164,7 +168,7 @@ impl ListSearchTui {
     }
 
     async fn fetch_new_gituser(&mut self) {
-        if self.searched_username.is_empty() {
+        if self.searched_username.trim().is_empty() {
             self.update_selected_user(None);
             self.input_mode = InputMode::Repo;
             return;
@@ -181,40 +185,72 @@ impl ListSearchTui {
 
     async fn change_input_mode(&mut self) {
         match self.input_mode {
-            InputMode::Repo => self.input_mode = InputMode::Username,
+            InputMode::Repo => {
+                self.input_mode = InputMode::Username;
+                self.reser_cursor();
+            }
             InputMode::Username => {
                 if self.changed_username() {
                     self.fetch_new_gituser().await;
                 } else {
                     self.input_mode = InputMode::Repo;
+                    self.reser_cursor();
                 }
             }
         }
     }
 
+    fn cursor_left(&mut self) {
+        let len = match self.input_mode {
+            InputMode::Repo => self.list.filter.len(),
+            InputMode::Username => self.searched_username.len(),
+        };
+        if self.cursor_offset < len {
+            self.cursor_offset += 1;
+        }
+    }
+
+    fn cursor_right(&mut self) {
+        if self.cursor_offset > 0 {
+            self.cursor_offset -= 1;
+        }
+    }
+
+    fn reser_cursor(&mut self) {
+        self.cursor_offset = 0;
+    }
+
     fn handle_input(&mut self, c: char) {
         match self.input_mode {
             InputMode::Repo => {
-                self.list.filter_append(c);
+                self.list
+                    .filter
+                    .insert(self.list.filter.len() - self.cursor_offset, c);
             }
             InputMode::Username => {
-                self.searched_username.push(c);
+                self.searched_username
+                    .insert(self.searched_username.len() - self.cursor_offset, c);
             }
-        }
+        };
     }
 
     fn handle_backspace(&mut self) {
         match self.input_mode {
             InputMode::Repo => {
-                self.list.filter_remove_last();
+                let i: i8 = self.list.filter.len() as i8 - self.cursor_offset as i8 - 1;
+                if i >= 0 {
+                    self.list.filter.remove(i as usize);
+                }
             }
             InputMode::Username => {
-                self.searched_username.pop();
+                let i: i8 = self.searched_username.len() as i8 - self.cursor_offset as i8 - 1;
+                if i >= 0 {
+                    self.searched_username.remove(i as usize);
+                }
             }
         }
     }
 
-    // TODO: add cursor
     async fn handle_events(&mut self) -> std::io::Result<(bool, Option<Cmd>)> {
         match crossterm::event::read()? {
             Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
@@ -227,8 +263,8 @@ impl ListSearchTui {
                     InputMode::Repo => self.list.state.previous(),
                     _ => {}
                 },
-                KeyCode::Left => {}  // move filter left
-                KeyCode::Right => {} // move filter right
+                KeyCode::Left => self.cursor_left(),
+                KeyCode::Right => self.cursor_right(),
                 KeyCode::Enter => match self.input_mode {
                     InputMode::Username => self.fetch_new_gituser().await,
                     InputMode::Repo => {
@@ -311,6 +347,11 @@ impl ListSearchTui {
             &mut list_scrollbar_state,
         );
 
+        frame.set_cursor_position(Position::new(
+            filter_area.x + self.list.filter.len() as u16 + 2 - self.cursor_offset as u16,
+            filter_area.y,
+        ));
+
         frame.render_widget(p_matches, matches_area);
         frame.render_widget(p_filter, filter_area);
     }
@@ -328,6 +369,11 @@ impl ListSearchTui {
             Span::styled("=> ", Style::new().blue()),
             Span::styled(self.searched_username.clone(), Style::default()),
         ])));
+
+        frame.set_cursor_position(Position::new(
+            input_area.x + self.searched_username.len() as u16 + 3 - self.cursor_offset as u16,
+            input_area.y,
+        ));
 
         frame.render_widget(info_text, info_area);
         frame.render_widget(input_line, input_area);
