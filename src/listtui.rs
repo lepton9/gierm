@@ -1,4 +1,5 @@
 use crate::filterlist::FilterList;
+use crate::git::GitUser;
 use crate::{api, git};
 use crossterm::cursor;
 use crossterm::event::{Event, KeyCode, KeyEventKind};
@@ -147,16 +148,31 @@ impl ListSearchTui {
         }
     }
 
+    fn update_selected_user(&mut self, new_gituser: Option<GitUser>) {
+        match new_gituser {
+            Some(gu) => {
+                let all_repos: Vec<String> = gu.repos.keys().cloned().collect();
+                self.list.set_list(all_repos);
+                self.git_user = Some(gu);
+            }
+            _ => {
+                let all_repos: Vec<String> = self.user.git.repos.keys().cloned().collect();
+                self.list.set_list(all_repos);
+                self.git_user = None;
+            }
+        }
+    }
+
     async fn fetch_new_gituser(&mut self) {
         if self.searched_username.is_empty() {
-            self.git_user = None;
+            self.update_selected_user(None);
             self.input_mode = InputMode::Repo;
             return;
         }
         let git_u = api::search_gituser(&self.user, &self.searched_username).await;
         match git_u {
             Some(gu) => {
-                self.git_user = Some(gu);
+                self.update_selected_user(Some(gu));
                 self.input_mode = InputMode::Repo;
             }
             _ => {}

@@ -26,6 +26,12 @@ impl FilterList {
         return l;
     }
 
+    pub fn set_list(&mut self, new_list: Vec<String>) {
+        self.list = new_list;
+        self.set_filter("".to_string());
+        self.state.state = ratatui::widgets::ListState::default();
+    }
+
     pub fn set_filter(&mut self, filter: String) {
         self.filter = filter;
     }
