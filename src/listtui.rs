@@ -1,4 +1,5 @@
 use crate::filterlist::FilterList;
+use crate::{api, git};
 use crossterm::cursor;
 use crossterm::event::{Event, KeyCode, KeyEventKind};
 use crossterm::{
@@ -50,17 +51,24 @@ pub enum GiermError {
     CmdExecError,
 }
 
-enum SearchUIMode {
+enum ListTuiMode {
     Full,
     Inline,
+}
+
+enum InputMode {
+    Repo,
+    Username,
 }
 
 struct ListSearchTui {
     user: crate::git::User,
     git_user: Option<crate::git::GitUser>,
+    searched_username: String,
     list: FilterList,
     command: crate::args::Command,
-    mode: SearchUIMode,
+    mode: ListTuiMode,
+    input_mode: InputMode,
     // Cursor pos
 }
 
@@ -68,15 +76,18 @@ impl ListSearchTui {
     fn new(
         user: crate::git::User,
         git_user: Option<crate::git::GitUser>,
+        searched_username: String,
         command: crate::args::Command,
         list: FilterList,
     ) -> Self {
         Self {
             user,
             git_user,
+            searched_username,
             command,
             list,
-            mode: SearchUIMode::Full,
+            mode: ListTuiMode::Full,
+            input_mode: InputMode::Repo,
         }
     }
 
@@ -128,24 +139,90 @@ impl ListSearchTui {
         }
     }
 
-    // TODO:
+    fn changed_username(&self) -> bool {
+        if let Some(u) = &self.git_user {
+            return self.searched_username.to_lowercase() != u.username.to_lowercase();
+        } else {
+            return true;
+        }
+    }
+
+    async fn fetch_new_gituser(&mut self) {
+        if self.searched_username.is_empty() {
+            self.git_user = None;
+            self.input_mode = InputMode::Repo;
+            return;
+        }
+        let git_u = api::search_gituser(&self.user, &self.searched_username).await;
+        match git_u {
+            Some(gu) => {
+                self.git_user = Some(gu);
+                self.input_mode = InputMode::Repo;
+            }
+            _ => {}
+        }
+    }
+
+    async fn change_input_mode(&mut self) {
+        match self.input_mode {
+            InputMode::Repo => self.input_mode = InputMode::Username,
+            InputMode::Username => {
+                if self.changed_username() {
+                    self.fetch_new_gituser().await;
+                } else {
+                    self.input_mode = InputMode::Repo;
+                }
+            }
+        }
+    }
+
+    fn handle_input(&mut self, c: char) {
+        match self.input_mode {
+            InputMode::Repo => {
+                self.list.filter_append(c);
+            }
+            InputMode::Username => {
+                self.searched_username.push(c);
+            }
+        }
+    }
+
+    fn handle_backspace(&mut self) {
+        match self.input_mode {
+            InputMode::Repo => {
+                self.list.filter_remove_last();
+            }
+            InputMode::Username => {
+                self.searched_username.pop();
+            }
+        }
+    }
+
+    // TODO: add cursor
     async fn handle_events(&mut self) -> std::io::Result<(bool, Option<Cmd>)> {
         match crossterm::event::read()? {
             Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
                 KeyCode::Esc => return Ok((true, None)),
-                KeyCode::Up => self.list.state.next(), // move list up
-                KeyCode::Down => self.list.state.previous(), // move list down
-                KeyCode::Left => {}                    // move filter left
-                KeyCode::Right => {}                   // move filter right
-                KeyCode::Enter => {
-                    let cmd = self.get_command();
-                    return Ok((true, cmd));
-                }
-                KeyCode::Backspace => self.list.filter_remove_last(), // remove char from filter
-                KeyCode::Tab => {} // switch filter mode to search diff user
-                KeyCode::Char(c) => {
-                    self.list.filter_append(c);
-                }
+                KeyCode::Up => match self.input_mode {
+                    InputMode::Repo => self.list.state.next(),
+                    _ => {}
+                },
+                KeyCode::Down => match self.input_mode {
+                    InputMode::Repo => self.list.state.previous(),
+                    _ => {}
+                },
+                KeyCode::Left => {}  // move filter left
+                KeyCode::Right => {} // move filter right
+                KeyCode::Enter => match self.input_mode {
+                    InputMode::Username => self.fetch_new_gituser().await,
+                    InputMode::Repo => {
+                        let cmd = self.get_command();
+                        return Ok((true, cmd));
+                    }
+                },
+                KeyCode::Tab => self.change_input_mode().await,
+                KeyCode::Backspace => self.handle_backspace(),
+                KeyCode::Char(c) => self.handle_input(c),
                 _ => {}
             },
             _ => {}
@@ -153,7 +230,7 @@ impl ListSearchTui {
         Ok((false, None))
     }
 
-    fn draw(&mut self, frame: &mut Frame) {
+    fn draw_list(&mut self, frame: &mut Frame) {
         let vertical = Layout::vertical([Min(0), Length(1), Length(1)]);
         let [list_area, matches_area, filter_area] = vertical.areas(frame.area());
 
@@ -220,6 +297,15 @@ impl ListSearchTui {
 
         frame.render_widget(p_matches, matches_area);
         frame.render_widget(p_filter, filter_area);
+    }
+
+    fn draw_search_user(&mut self, frame: &mut Frame) {}
+
+    fn draw(&mut self, frame: &mut Frame) {
+        match self.input_mode {
+            InputMode::Repo => self.draw_list(frame),
+            InputMode::Username => self.draw_search_user(frame),
+        }
     }
 }
 
@@ -313,12 +399,13 @@ pub async fn run_list_selector(
     if username.is_empty() || username == user.git.username {
         let all_repos: Vec<String> = user.git.repos.keys().cloned().collect();
         let fl = FilterList::new(all_repos, filter);
-        list_tui = ListSearchTui::new(user, None, command, fl);
+        list_tui = ListSearchTui::new(user, None, "".to_string(), command, fl);
     } else if let Some(mut git_user) = crate::api::search_gituser(&user, &username).await {
         let all_repos: Vec<String> = git_user.repos.keys().cloned().collect();
         let fl = FilterList::new(all_repos, filter);
-        list_tui = ListSearchTui::new(user, Some(git_user), command, fl);
+        list_tui = ListSearchTui::new(user, Some(git_user), username, command, fl);
     } else {
+        // TODO: goto input new username
         return Err(GiermError::NotFoundError);
     }
 
