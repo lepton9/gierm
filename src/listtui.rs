@@ -315,7 +315,23 @@ impl ListSearchTui {
         frame.render_widget(p_filter, filter_area);
     }
 
-    fn draw_search_user(&mut self, frame: &mut Frame) {}
+    fn draw_search_user(&mut self, frame: &mut Frame) {
+        let vertical = Layout::vertical([Min(0), Length(1), Length(1)]);
+        let [_, info_area, input_area] = vertical.areas(frame.area());
+
+        let info_text = Paragraph::new(Text::from(Line::from(vec![Span::styled(
+            "Input git username:",
+            Style::new().blue(),
+        )])));
+
+        let input_line = Paragraph::new(Text::from(Line::from(vec![
+            Span::styled("=> ", Style::new().blue()),
+            Span::styled(self.searched_username.clone(), Style::default()),
+        ])));
+
+        frame.render_widget(info_text, info_area);
+        frame.render_widget(input_line, input_area);
+    }
 
     fn draw(&mut self, frame: &mut Frame) {
         match self.input_mode {
