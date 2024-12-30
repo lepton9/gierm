@@ -1,4 +1,4 @@
-use crate::{filterlist::GiermError, git};
+use crate::{git, listtui::GiermError};
 use std::collections::HashMap;
 
 const API_URL: &str = "https://api.github.com";

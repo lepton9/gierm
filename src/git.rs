@@ -127,7 +127,7 @@ impl Commit {
     }
 
     pub fn to_string(&self) -> String {
-        return format!("{} {}", self.date, self.message_short());
+        return format!("{} {}", self.sha_short(), self.message_short());
     }
 
     pub fn message_short(&self) -> String {

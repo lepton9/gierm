@@ -6,6 +6,7 @@ mod args;
 mod filterlist;
 mod git;
 mod layout;
+mod listtui;
 mod tui;
 
 const ACCESS_TOKEN: &str = "GITHUB_ACCESS_TOKEN";
@@ -102,7 +103,7 @@ async fn login_user() -> Option<git::User> {
     if username.is_empty() {
         println!("No existing user. Login with Github user.");
         if let Ok((confirm, input)) =
-            filterlist::ask_confirmation("Enter username".to_string(), &"".to_string())
+            listtui::ask_confirmation("Enter username".to_string(), &"".to_string())
         {
             if !confirm {
                 return None;
@@ -131,7 +132,7 @@ async fn login_user() -> Option<git::User> {
 
 async fn clone(user: git::User, args: &args::CLArgs) {
     if args.username.is_none() || args.username.as_ref().unwrap().clone() == user.git.username {
-        let res = filterlist::run_list_selector(
+        let res = listtui::run_list_selector(
             user,
             "".to_string(),
             args.repo.clone().unwrap_or("".to_string()),
@@ -139,7 +140,7 @@ async fn clone(user: git::User, args: &args::CLArgs) {
         )
         .await;
     } else {
-        let res = filterlist::run_list_selector(
+        let res = listtui::run_list_selector(
             user,
             args.username.clone().unwrap_or("".to_string()),
             args.repo.clone().unwrap_or("".to_string()),
@@ -182,29 +183,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     tui::run_tui(user).await;
-
-    // let repo_name = "gierm".to_string();
-    // let repo = api::fetch_repo(&user, &user.git.username, &repo_name)
-    //     .await
-    //     .unwrap();
-    // let commits: Vec<git::Commit> = api::fetch_repo_commits(&user, &repo).await;
-    // if let Some(repo) = user.git.repos.get_mut(&repo_name) {
-    //     repo.commits = commits;
-    // }
-
-    // println!("{:?}", user);
-
-    // if let Some(repo) = user.repos.get(&repo_name) {
-    //     for commit in &repo.commits {
-    //         api::fetch_commit_info(&user, user.username.clone(), repo.name.clone(), commit).await;
-    //         println!("{:?}", commit);
-    //     }
-    // }
-
-    // let git_user: git::GitUser = api::search_user(&user, &"thePrimeagen".to_string())
-    //     .await
-    //     .unwrap();
-    // println!("{:?}", git_user);
 
     return Ok(());
 }

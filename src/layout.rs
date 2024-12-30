@@ -13,9 +13,6 @@ pub enum BlockType {
 
 #[derive(PartialEq, Clone)]
 pub enum BlockState {
-    RepoList,
-    CommitList,
-    CommitInfo,
     Default,
 }
 

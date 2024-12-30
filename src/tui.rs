@@ -13,12 +13,7 @@ use ratatui::{
 use Constraint::{Fill, Length, Min};
 
 pub async fn run_tui(user: crate::git::User) {
-    let mut tui = Tui::new(
-        user,
-        "lepton9".to_string(),
-        "".to_string(),
-        "Status text".to_string(),
-    );
+    let mut tui = Tui::new(user, "".to_string(), "".to_string(), "".to_string());
     tui.run().await;
 }
 
@@ -149,6 +144,7 @@ impl SearchedUser {
             commit_list: StateL::new(0),
         }
     }
+
     fn selected_repo_name(&mut self) -> Option<String> {
         let repo_index = self.repo_list.get_index()?;
         return Some(self.repo_list.get_filtered()[repo_index].clone());
@@ -837,6 +833,7 @@ impl Tui {
             &mut commit_list_scrollbar_state,
         );
 
+        // TODO: add list of the modified files and show patch
         let commit_info_block = Paragraph::new(Text::from(commit_info_lines))
             .block(Block::default().padding(Padding::uniform(1)));
 
