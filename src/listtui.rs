@@ -70,7 +70,7 @@ struct ListSearchTui {
     command: crate::args::Command,
     mode: ListTuiMode,
     input_mode: InputMode,
-    cursor_offset: usize,
+    cursor: crate::cursor::Cursor,
     // Cursor pos
 }
 
@@ -90,7 +90,7 @@ impl ListSearchTui {
             list,
             mode: ListTuiMode::Full,
             input_mode: InputMode::Repo,
-            cursor_offset: 0,
+            cursor: crate::cursor::Cursor::new(),
         }
     }
 
@@ -187,49 +187,26 @@ impl ListSearchTui {
         match self.input_mode {
             InputMode::Repo => {
                 self.input_mode = InputMode::Username;
-                self.reser_cursor();
+                self.cursor.reset();
             }
             InputMode::Username => {
                 if self.changed_username() {
                     self.fetch_new_gituser().await;
                 } else {
                     self.input_mode = InputMode::Repo;
-                    self.reser_cursor();
+                    self.cursor.reset();
                 }
             }
         }
     }
 
-    fn cursor_left(&mut self) {
-        let len = match self.input_mode {
-            InputMode::Repo => self.list.filter.len(),
-            InputMode::Username => self.searched_username.len(),
-        };
-        if self.cursor_offset < len {
-            self.cursor_offset += 1;
-        }
-    }
-
-    fn cursor_right(&mut self) {
-        if self.cursor_offset > 0 {
-            self.cursor_offset -= 1;
-        }
-    }
-
-    fn reser_cursor(&mut self) {
-        self.cursor_offset = 0;
-    }
-
     fn handle_input(&mut self, c: char) {
         match self.input_mode {
             InputMode::Repo => {
-                self.list
-                    .filter
-                    .insert(self.list.filter.len() - self.cursor_offset, c);
+                self.cursor.insert_at_cursor(&mut self.list.filter, c);
             }
             InputMode::Username => {
-                self.searched_username
-                    .insert(self.searched_username.len() - self.cursor_offset, c);
+                self.cursor.insert_at_cursor(&mut self.searched_username, c);
             }
         };
     }
@@ -237,16 +214,10 @@ impl ListSearchTui {
     fn handle_backspace(&mut self) {
         match self.input_mode {
             InputMode::Repo => {
-                let i: i8 = self.list.filter.len() as i8 - self.cursor_offset as i8 - 1;
-                if i >= 0 {
-                    self.list.filter.remove(i as usize);
-                }
+                self.cursor.remove_at_cursor(&mut self.list.filter);
             }
             InputMode::Username => {
-                let i: i8 = self.searched_username.len() as i8 - self.cursor_offset as i8 - 1;
-                if i >= 0 {
-                    self.searched_username.remove(i as usize);
-                }
+                self.cursor.remove_at_cursor(&mut self.searched_username);
             }
         }
     }
@@ -263,8 +234,18 @@ impl ListSearchTui {
                     InputMode::Repo => self.list.state.previous(),
                     _ => {}
                 },
-                KeyCode::Left => self.cursor_left(),
-                KeyCode::Right => self.cursor_right(),
+                KeyCode::Left => match self.input_mode {
+                    InputMode::Repo => {
+                        self.cursor.c_left(self.list.filter.len());
+                    }
+                    InputMode::Username => {
+                        self.cursor.c_left(self.searched_username.len());
+                    }
+                },
+
+                KeyCode::Right => {
+                    self.cursor.c_right();
+                }
                 KeyCode::Enter => match self.input_mode {
                     InputMode::Username => self.fetch_new_gituser().await,
                     InputMode::Repo => {
@@ -348,7 +329,7 @@ impl ListSearchTui {
         );
 
         frame.set_cursor_position(Position::new(
-            filter_area.x + self.list.filter.len() as u16 + 2 - self.cursor_offset as u16,
+            filter_area.x + self.list.filter.len() as u16 + 2 - self.cursor.offset as u16,
             filter_area.y,
         ));
 
@@ -371,7 +352,7 @@ impl ListSearchTui {
         ])));
 
         frame.set_cursor_position(Position::new(
-            input_area.x + self.searched_username.len() as u16 + 3 - self.cursor_offset as u16,
+            input_area.x + self.searched_username.len() as u16 + 3 - self.cursor.offset as u16,
             input_area.y,
         ));
 
@@ -412,7 +393,7 @@ fn exec_command(cmd: Cmd) -> Result<String, GiermError> {
 
 pub fn ask_confirmation(prompt: String, input_beg: &String) -> std::io::Result<(bool, String)> {
     crossterm::terminal::enable_raw_mode()?;
-    let mut cur_offset: usize = 0;
+    let mut cursor = crate::cursor::Cursor::new();
     let mut input: String = String::default();
     let mut cout = std::io::stdout();
     writeln!(&mut cout, "{}", prompt)?;
@@ -428,14 +409,12 @@ pub fn ask_confirmation(prompt: String, input_beg: &String) -> std::io::Result<(
                     return Ok((false, "".to_string()));
                 }
                 KeyCode::Left => {
-                    if cur_offset < input.len() {
-                        cur_offset += 1;
+                    if cursor.c_left(input.len()) {
                         cout.execute(MoveLeft(1))?;
                     }
                 }
                 KeyCode::Right => {
-                    if cur_offset > 0 {
-                        cur_offset -= 1;
+                    if cursor.c_right() {
                         cout.execute(MoveRight(1))?;
                     }
                 }
@@ -445,15 +424,13 @@ pub fn ask_confirmation(prompt: String, input_beg: &String) -> std::io::Result<(
                     return Ok((true, input));
                 }
                 KeyCode::Backspace => {
-                    let i: i8 = input.len() as i8 - cur_offset as i8 - 1;
-                    if i >= 0 {
-                        input.remove(i as usize);
+                    if cursor.remove_at_cursor(&mut input) {
                         cout.execute(MoveLeft(1))?;
                     }
                 }
                 KeyCode::Char(c) => {
+                    cursor.insert_at_cursor(&mut input, c);
                     cout.execute(MoveRight(1))?;
-                    input.insert(input.len() - cur_offset, c);
                 }
                 _ => {}
             },

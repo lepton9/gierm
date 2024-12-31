@@ -3,6 +3,7 @@ use std::io::{prelude::*, BufReader};
 
 mod api;
 mod args;
+mod cursor;
 mod filterlist;
 mod git;
 mod layout;
