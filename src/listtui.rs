@@ -451,17 +451,18 @@ pub async fn run_list_selector(
     command: crate::args::Command,
 ) -> Result<(), GiermError> {
     let mut list_tui: ListSearchTui;
-    if username.is_empty() || username == user.git.username {
-        let all_repos: Vec<String> = user.git.repos.keys().cloned().collect();
-        let fl = FilterList::new(all_repos, filter);
-        list_tui = ListSearchTui::new(user, None, "".to_string(), command, fl);
-    } else if let Some(mut git_user) = crate::api::search_gituser(&user, &username).await {
+    if let Some(mut git_user) = crate::api::search_gituser(&user, &username).await {
         let all_repos: Vec<String> = git_user.repos.keys().cloned().collect();
         let fl = FilterList::new(all_repos, filter);
         list_tui = ListSearchTui::new(user, Some(git_user), username, command, fl);
     } else {
-        // TODO: goto input new username
-        return Err(GiermError::NotFoundError);
+        let all_repos: Vec<String> = user.git.repos.keys().cloned().collect();
+        let fl = FilterList::new(all_repos, filter);
+        let not_found = !username.is_empty() && username != user.git.username;
+        list_tui = ListSearchTui::new(user, None, "".to_string(), command, fl);
+        if not_found {
+            list_tui.input_mode = InputMode::Username;
+        }
     }
 
     let cmd = list_tui.run().await;
