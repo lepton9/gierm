@@ -741,7 +741,7 @@ impl Tui {
         match repo_name {
             Some(r_name) => {
                 if self.show_su_data() {
-                    let su = self.searched_user.as_ref().unwrap();
+                    let su = self.searched_user.as_ref().expect("No repo with name");
                     repo = su.user.repos.get(&r_name).unwrap();
                     commit_list_items = repo.commits.iter().map(|c| c.to_string()).collect();
                     commit_list_state = su.commit_list.state.clone();
@@ -750,11 +750,14 @@ impl Tui {
 
                     let commit_i = su.commit_list.get_selected_index();
                     if let Some(index) = commit_i {
-                        let commit = repo.commits.get(index).map(|c| c).unwrap();
-                        commit_info_lines = commit_info_text(commit);
+                        let commit = repo.commits.get(index).map(|c| c);
+                        commit_info_lines = match commit {
+                            Some(c) => commit_info_text(c),
+                            _ => Vec::default(),
+                        }
                     }
                 } else {
-                    repo = self.user.git.repos.get(&r_name).unwrap();
+                    repo = self.user.git.repos.get(&r_name).expect("No repo with name");
                     commit_list_items = repo.commits.iter().map(|c| c.to_string()).collect();
                     commit_list_state = self.commit_list.state.clone();
                     commit_list_scrollbar_state = ScrollbarState::new(self.commit_list.items_len)
@@ -762,8 +765,11 @@ impl Tui {
 
                     let commit_i = self.commit_list.get_selected_index();
                     if let Some(index) = commit_i {
-                        let commit = repo.commits.get(index).map(|c| c).unwrap();
-                        commit_info_lines = commit_info_text(commit);
+                        let commit = repo.commits.get(index).map(|c| c);
+                        commit_info_lines = match commit {
+                            Some(c) => commit_info_text(c),
+                            _ => Vec::default(),
+                        }
                     }
                 }
 
