@@ -42,10 +42,12 @@ fn find_config_file() -> Option<Config> {
             Err(_) => continue,
         }
     }
-    if file.is_none() {
-        return None;
-    }
-    let reader = BufReader::new(file.unwrap());
+
+    let reader = match file {
+        Some(file) => BufReader::new(file),
+        None => return None,
+    };
+
     let mut config: Config = Config::new(None, None);
 
     for line in reader.lines() {
@@ -77,14 +79,13 @@ fn save_to_file(file_path: String, data: String) {
 
 async fn login_user() -> Option<git::User> {
     let config = find_config_file();
-    println!("{:?}", config);
 
     let mut username: String = String::default();
-    let mut password: String = std::env::var(ACCESS_TOKEN).unwrap_or("".to_string());
+    let mut password: String = std::env::var(ACCESS_TOKEN).unwrap_or_default();
 
     if password.is_empty() {
         if let Some(c) = &config {
-            password = c.password.clone().unwrap_or("".to_string());
+            password = c.password.clone().unwrap_or_default();
         }
     }
     if password.is_empty() {
@@ -98,7 +99,7 @@ async fn login_user() -> Option<git::User> {
     }
 
     if let Some(c) = config {
-        username = c.username.clone().unwrap_or("".to_string());
+        username = c.username.clone().unwrap_or_default();
     }
 
     if username.is_empty() {
@@ -132,23 +133,18 @@ async fn login_user() -> Option<git::User> {
 }
 
 async fn clone(user: git::User, args: &args::CLArgs) {
-    if args.username.is_none() || args.username.as_ref().unwrap().clone() == user.git.username {
-        let res = listtui::run_list_selector(
-            user,
-            "".to_string(),
-            args.repo.clone().unwrap_or("".to_string()),
-            args::Command::CLONE,
-        )
-        .await;
-    } else {
-        let res = listtui::run_list_selector(
-            user,
-            args.username.clone().unwrap_or("".to_string()),
-            args.repo.clone().unwrap_or("".to_string()),
-            args::Command::CLONE,
-        )
-        .await;
-    }
+    let username =
+        match args.username.is_none() || args.username.as_deref() == Some(&user.git.username) {
+            true => "".to_string(),
+            false => args.username.clone().unwrap_or_default(),
+        };
+    let res = listtui::run_list_selector(
+        user,
+        username,
+        args.repo.clone().unwrap_or_default(),
+        args::Command::CLONE,
+    )
+    .await;
 }
 
 #[tokio::main]
@@ -167,12 +163,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    let some_user = login_user().await;
-    if some_user.is_none() {
-        println!("Login failed..");
-        return Ok(());
-    }
-    let user = some_user.unwrap();
+    let user = match login_user().await {
+        Some(user) => user,
+        None => {
+            println!("Login failed..");
+            return Ok(());
+        }
+    };
 
     if let Some(cmd) = &args.command {
         match args::command(cmd) {
