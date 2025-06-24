@@ -203,13 +203,19 @@ pub async fn fetch_data(
 
     loop {
         let mut headers = reqwest::header::HeaderMap::new();
-        headers.insert("User-Agent", "gierm".parse().unwrap());
-        headers.insert("Accept", "application/vnd.github+json".parse().unwrap());
+        headers.insert(
+            "User-Agent",
+            reqwest::header::HeaderValue::from_static("gierm"),
+        );
+        headers.insert(
+            "Accept",
+            reqwest::header::HeaderValue::from_static("application/vnd.github+json"),
+        );
         headers.insert(
             "Authorization",
-            format!("Token {}", user.get_token()).parse().unwrap(),
+            reqwest::header::HeaderValue::from_str(&user.get_auth_header())
+                .unwrap_or_else(|_| reqwest::header::HeaderValue::from_static("")),
         );
-        // println!("GET: {}", fetch_url);
         let res = client
             .get(fetch_url)
             .headers(headers)

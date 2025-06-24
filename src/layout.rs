@@ -117,17 +117,17 @@ impl TuiLayout {
     }
 
     pub fn add_layout(&mut self, block_type: BlockType, col: usize) -> &mut TuiLayout {
-        let len = self.blocks[col].len();
-        let pos = BlockPos::new(col, len);
+        if col >= self.blocks.len() {
+            self.blocks.resize_with(col + 1, Vec::new);
+        }
+        let pos = BlockPos::new(col, self.blocks[col].len());
         let mut block = TuiBlock::new(block_type, pos);
         block.sublayout = Some(TuiLayout::new());
         self.blocks[col].push(block);
-        return self.blocks[col]
+        self.blocks[col]
             .last_mut()
-            .unwrap()
-            .sublayout
-            .as_mut()
-            .unwrap();
+            .and_then(|block| block.sublayout.as_mut())
+            .expect("Failed to create sublayout")
     }
 
     pub fn active_block_pos(&self) -> &BlockPos {
@@ -136,7 +136,11 @@ impl TuiLayout {
 
     pub fn active_block(&mut self) -> &mut TuiBlock {
         if self.sublayout_active && self.active_sublayout().is_some() {
-            return self.active_sublayout().as_mut().unwrap().active_block();
+            return self
+                .active_sublayout()
+                .as_mut()
+                .expect("Failed to get active sublayout")
+                .active_block();
         } else {
             return &mut self.blocks[self.active.col][self.active.row];
         }

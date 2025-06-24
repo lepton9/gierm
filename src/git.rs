@@ -42,6 +42,10 @@ impl User {
         return self.password.clone();
     }
 
+    pub fn get_auth_header(&self) -> String {
+        return format!("Token {}", self.get_token());
+    }
+
     pub fn set_ratelimit(&mut self, limit: i32) {
         self.remaining = limit;
     }

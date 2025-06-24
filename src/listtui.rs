@@ -377,10 +377,10 @@ fn exec_command(cmd: Cmd) -> Result<String, GiermError> {
     match command.output() {
         Ok(output) => {
             if output.stderr.is_empty() {
-                let out: String = String::from_utf8(output.stdout).unwrap();
+                let out: String = String::from_utf8(output.stdout).unwrap_or_default();
                 return Ok(out);
             } else {
-                let err: String = String::from_utf8(output.stderr).unwrap();
+                let err: String = String::from_utf8(output.stderr).unwrap_or_default();
                 return Ok(err);
             }
         }
