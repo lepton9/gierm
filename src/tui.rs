@@ -131,12 +131,10 @@ struct SearchedUser {
 impl SearchedUser {
     pub fn new(user: crate::git::GitUser, filter: String) -> Self {
         let mut repos: Vec<String> = user.repos.keys().cloned().collect();
-        repos.sort_by(|x, y| {
+        repos.sort_by_key(|x| {
             user.repos
-                .get(y)
-                .unwrap()
-                .updated_at
-                .cmp(&user.repos.get(x).unwrap().updated_at)
+                .get(x)
+                .map(|repo| std::cmp::Reverse(repo.updated_at))
         });
         Self {
             user,
@@ -147,7 +145,33 @@ impl SearchedUser {
 
     fn selected_repo_name(&mut self) -> Option<String> {
         let repo_index = self.repo_list.get_index()?;
-        return Some(self.repo_list.get_filtered()[repo_index].clone());
+        let list = self.repo_list.get_filtered();
+        return match repo_index < list.len() {
+            true => Some(list[repo_index].clone()),
+            false => None,
+        };
+    }
+
+    fn selected_repo_mut(&mut self) -> Option<&mut crate::git::Repo> {
+        if let Some(repo_name) = self.selected_repo_name() {
+            return self.user.repos.get_mut(&repo_name);
+        }
+        return None;
+    }
+
+    fn selected_repo(&mut self) -> Option<&crate::git::Repo> {
+        if let Some(repo_name) = self.selected_repo_name() {
+            return self.user.repos.get(&repo_name);
+        }
+        return None;
+    }
+
+    async fn fetch_selected_commits(&mut self, user: &crate::git::User) -> Option<usize> {
+        if let Some(repo) = self.selected_repo_mut() {
+            repo.commits = crate::api::fetch_repo_commits(&user, &repo).await;
+            return Some(repo.commits.len());
+        }
+        return None;
     }
 }
 
@@ -174,13 +198,11 @@ impl Tui {
     ) -> Self {
         let repos_state = StateL::new((&user).git.repos.keys().len());
         let mut repos: Vec<String> = user.git.repos.keys().cloned().collect();
-        repos.sort_by(|x, y| {
+        repos.sort_by_key(|x| {
             user.git
                 .repos
-                .get(y)
-                .unwrap()
-                .updated_at
-                .cmp(&user.git.repos.get(x).unwrap().updated_at)
+                .get(x)
+                .map(|repo| std::cmp::Reverse(repo.updated_at))
         });
         let mut lo = TuiLayout::new();
         create_layout(&mut lo);
@@ -205,50 +227,52 @@ impl Tui {
             terminal
                 .draw(|frame| self.draw(frame))
                 .expect("failed to draw frame");
-            if self.handle_events().await.unwrap() {
+            if self.handle_events().await.unwrap_or(true) {
                 break;
             }
         }
         ratatui::restore();
     }
 
-    fn selected_repo_name(&self) -> Option<String> {
+    fn selected_repo_name_user(&self) -> Option<String> {
         let repo_index = self.repo_list_state.get_selected_index()?;
         return Some(self.repo_list[repo_index].clone());
     }
 
     fn selected_repo_name_su(&mut self) -> Option<String> {
         let su = self.searched_user.as_mut()?;
-        let repo_index = su.repo_list.get_index()?;
-        let list = su.repo_list.get_filtered();
-        return Some(list.get(repo_index).cloned()?);
+        return su.selected_repo_name();
     }
 
     fn repo_list_prev(&mut self) {
         if self.show_su_data() {
-            let su = self.searched_user.as_mut().unwrap();
-            su.repo_list.state.previous();
-            su.commit_list.state = ListState::default();
+            if let Some(su) = &mut self.searched_user {
+                su.repo_list.state.previous();
+                su.commit_list.state = ListState::default();
+            }
         } else {
-            self.commit_list.state = ListState::default();
             self.repo_list_state.previous();
+            self.commit_list.state = ListState::default();
         }
     }
 
     fn repo_list_next(&mut self) {
         if self.show_su_data() {
-            let su = self.searched_user.as_mut().unwrap();
-            su.repo_list.state.next();
-            su.commit_list.state = ListState::default();
+            if let Some(su) = &mut self.searched_user {
+                su.repo_list.state.next();
+                su.commit_list.state = ListState::default();
+            }
         } else {
-            self.commit_list.state = ListState::default();
             self.repo_list_state.next();
+            self.commit_list.state = ListState::default();
         }
     }
 
     fn commit_list_prev(&mut self) {
         if self.show_su_data() {
-            self.searched_user.as_mut().unwrap().commit_list.previous();
+            if let Some(su) = &mut self.searched_user {
+                su.commit_list.previous();
+            }
         } else {
             self.commit_list.previous();
         }
@@ -256,7 +280,9 @@ impl Tui {
 
     fn commit_list_next(&mut self) {
         if self.show_su_data() {
-            self.searched_user.as_mut().unwrap().commit_list.next();
+            if let Some(su) = &mut self.searched_user {
+                su.commit_list.next();
+            }
         } else {
             self.commit_list.next();
         }
@@ -268,6 +294,55 @@ impl Tui {
 
     fn set_status(&mut self, status: String) {
         self.status_text = status;
+    }
+
+    fn selected_repo_name(&mut self) -> Option<String> {
+        if self.show_su_data() {
+            return self.selected_repo_name_su();
+        }
+        return self.selected_repo_name_user();
+    }
+
+    fn selected_repo_mut(&mut self) -> Option<&mut crate::git::Repo> {
+        if self.show_su_data() {
+            if let Some(su) = &mut self.searched_user {
+                return su.selected_repo_mut();
+            }
+        } else if let Some(repo_name) = self.selected_repo_name() {
+            return self.user.git.repos.get_mut(&repo_name);
+        }
+        return None;
+    }
+
+    fn selected_repo(&mut self) -> Option<&crate::git::Repo> {
+        if self.show_su_data() {
+            if let Some(su) = &mut self.searched_user {
+                return su.selected_repo();
+            }
+        } else if let Some(repo_name) = self.selected_repo_name() {
+            return self.user.git.repos.get(&repo_name);
+        }
+        return None;
+    }
+
+    async fn fetch_selected_commits(&mut self) -> Option<usize> {
+        if self.show_su_data() {
+            if let Some(su) = &mut self.searched_user {
+                return su.fetch_selected_commits(&self.user).await;
+            }
+        } else {
+            let mut commits: Vec<crate::git::Commit> = Vec::default();
+            if let Some(repo_name) = self.selected_repo_name() {
+                let repo = self.user.git.repos.get(&repo_name)?;
+                commits = crate::api::fetch_repo_commits(&self.user, &repo).await;
+            }
+            if let Some(repo) = self.selected_repo_mut() {
+                repo.commits = commits;
+                self.commit_list.items_len = repo.commits.len();
+                return Some(self.commit_list.items_len);
+            }
+        }
+        return None;
     }
 
     async fn handle_events(&mut self) -> std::io::Result<bool> {
@@ -363,97 +438,82 @@ impl Tui {
     }
 
     async fn search(&mut self) {
-        if self.searched_user.is_none()
-            || self.search_user.to_lowercase()
-                != self
-                    .searched_user
-                    .as_ref()
-                    .unwrap()
-                    .user
-                    .username
-                    .to_lowercase()
-        {
-            let search_result = crate::api::search_gituser(&self.user, &self.search_user).await;
-            self.searched_user = match search_result {
-                Some(mut user) => {
-                    user.repos = crate::api::fetch_repos(&self.user, &self.search_user).await;
-
-                    let found: SearchedUser = SearchedUser::new(user, self.search_repo.clone());
-                    self.set_status(format!(
-                        "Found user {} with {} repos",
-                        self.search_user,
-                        found.user.repos.len()
-                    ));
-                    Some(found)
-                }
-                None => {
-                    self.set_status(format!("No user found with '{}'", self.search_user));
-                    None
-                }
-            };
+        if let Some(su) = &mut self.searched_user {
+            if self.search_user.to_lowercase() == su.user.username.to_lowercase() {
+                su.repo_list.set_filter(self.search_repo.clone());
+                self.show_user_data = false;
+                self.layout.unselect_layout();
+                return;
+            }
         }
-        if self.searched_user.is_some() {
-            self.searched_user
-                .as_mut()
-                .unwrap()
-                .repo_list
-                .set_filter(self.search_repo.clone());
+
+        match crate::api::search_gituser(&self.user, &self.search_user).await {
+            Some(mut user) => {
+                user.repos = crate::api::fetch_repos(&self.user, &self.search_user).await;
+                let found = SearchedUser::new(user, self.search_repo.clone());
+                self.set_status(format!(
+                    "Found user {} with {} repos",
+                    self.search_user,
+                    found.user.repos.len()
+                ));
+                self.searched_user = Some(found);
+            }
+            None => {
+                self.set_status(format!("No user found with '{}'", self.search_user));
+                self.searched_user = None;
+            }
+        }
+
+        if let Some(su) = &mut self.searched_user {
+            su.repo_list.set_filter(self.search_repo.clone());
             self.show_user_data = false;
             self.layout.unselect_layout();
         }
     }
 
-    // TODO: show status message when fetching data
     async fn handle_repo_select(&mut self) {
         if self.show_su_data() {
-            let su = self.searched_user.as_mut().unwrap();
+            let su = self
+                .searched_user
+                .as_mut()
+                .expect("Failed to get searched user");
             if su.repo_list.state.state == ListState::default() {
                 su.repo_list.state.next();
-            } else {
-                let repo_name = su
-                    .selected_repo_name()
-                    .expect("Expected repo index")
-                    .clone();
-                let repo = su.user.repos.get(&repo_name).unwrap();
+                return;
+            }
+            let mut commits_len = 0;
+            if let Some(repo) = su.selected_repo() {
                 if repo.commits.is_empty() {
-                    let commits: Vec<crate::git::Commit> =
-                        crate::api::fetch_repo_commits(&self.user, &repo).await;
-                    if let Some(repo) = su.user.repos.get_mut(&repo.name.clone()) {
-                        repo.commits = commits;
-                        su.commit_list.items_len = repo.commits.len();
-                    }
-                    let items_len = su.commit_list.items_len;
-                    su.commit_list.state = ListState::default();
-                    self.set_status(format!("Fetched {} commits", items_len));
-                } else {
-                    su.commit_list.items_len = repo.commits.len();
-                    su.commit_list.state = ListState::default();
+                    commits_len = su.fetch_selected_commits(&self.user).await.unwrap_or(0);
                 }
+                su.commit_list.items_len = commits_len;
+                su.commit_list.state = ListState::default();
                 self.layout.next_col();
+                if commits_len > 0 {
+                    self.set_status(format!("Fetched {} commits", commits_len));
+                }
             }
         } else {
             if self.repo_list_state.state == ListState::default() {
                 self.repo_list_state.next();
-            } else {
-                let repo_name = self.selected_repo_name().expect("Expected repo index");
-                let repo = self.user.git.repos.get(&repo_name).unwrap();
+                return;
+            }
+            let mut commits_len = 0;
+            if let Some(repo) = self.selected_repo() {
                 if repo.commits.is_empty() {
-                    let commits: Vec<crate::git::Commit> =
-                        crate::api::fetch_repo_commits(&self.user, &repo).await;
-                    if let Some(repo) = self.user.git.repos.get_mut(&repo.name.clone()) {
-                        repo.commits = commits;
-                        self.commit_list.items_len = repo.commits.len();
-                    }
-                    self.set_status(format!("Fetched {} commits", self.commit_list.items_len));
-                } else {
-                    self.commit_list.items_len = repo.commits.len();
+                    commits_len = self.fetch_selected_commits().await.unwrap_or(0);
                 }
+                self.commit_list.items_len = commits_len;
                 self.commit_list.state = ListState::default();
                 self.layout.next_col();
+                if commits_len > 0 {
+                    self.set_status(format!("Fetched {} commits", commits_len));
+                }
             }
         }
     }
 
+    // TODO: refactor
     async fn handle_commit_select(&mut self) {
         if self.show_su_data() {
             let su = self.searched_user.as_mut().unwrap();
@@ -485,7 +545,7 @@ impl Tui {
             if self.repo_list_state.state != ListState::default() {
                 if let Some(index) = self.commit_list.get_selected_index() {
                     let username = &self.user.git.username;
-                    let repo_name = self.selected_repo_name().unwrap();
+                    let repo_name = self.selected_repo_name_user().unwrap();
                     let repo = self.user.git.repos.get(&repo_name.clone()).unwrap();
                     let commit = repo.commits.get(index).map(|commit| commit).unwrap();
                     if !commit.info.is_some() {
