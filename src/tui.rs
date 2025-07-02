@@ -427,8 +427,7 @@ impl Tui {
             }
             if let Some(repo) = self.selected_repo_mut() {
                 repo.commits = commits;
-                self.commit_list.items_len = repo.commits.len();
-                return Some(self.commit_list.items_len);
+                return Some(repo.commits.len());
             }
         }
         return None;
@@ -570,15 +569,19 @@ impl Tui {
                 su.repo_list.state.next();
                 return;
             }
-            let mut commits_len = 0;
             if let Some(repo) = su.selected_repo() {
-                if repo.commits.is_empty() {
-                    commits_len = su.fetch_selected_commits(&self.user).await.unwrap_or(0);
-                }
+                let (commits_len, fetched) = if repo.commits.is_empty() {
+                    (
+                        su.fetch_selected_commits(&self.user).await.unwrap_or(0),
+                        true,
+                    )
+                } else {
+                    (repo.commits.len(), false)
+                };
                 su.commit_list.items_len = commits_len;
                 su.commit_list.state = ListState::default();
                 self.layout.next_col();
-                if commits_len > 0 {
+                if fetched {
                     self.set_status(format!("Fetched {} commits", commits_len));
                 }
             }
@@ -587,17 +590,17 @@ impl Tui {
                 self.repo_list_state.next();
                 return;
             }
-            let mut commits_len = 0;
             if let Some(repo) = self.selected_repo() {
-                if repo.commits.is_empty() {
-                    commits_len = self.fetch_selected_commits().await.unwrap_or(0);
-                }
+                let commits_len = if repo.commits.is_empty() {
+                    let len = self.fetch_selected_commits().await.unwrap_or(0);
+                    self.set_status(format!("Fetched {} commits", len));
+                    len
+                } else {
+                    repo.commits.len()
+                };
                 self.commit_list.items_len = commits_len;
                 self.commit_list.state = ListState::default();
                 self.layout.next_col();
-                if commits_len > 0 {
-                    self.set_status(format!("Fetched {} commits", commits_len));
-                }
             }
         }
     }
