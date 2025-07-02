@@ -673,7 +673,10 @@ impl Tui {
         let [info_area, commit_list_area, commit_info_area] = right_vertical.areas(right_area);
 
         let (username, name, email, bio) = if self.show_su_data() {
-            let su = self.searched_user.as_ref().unwrap();
+            let su = self
+                .searched_user
+                .as_ref()
+                .expect("Failed to get searched user");
             (
                 su.user.username.clone(),
                 su.user.name.clone(),
@@ -726,7 +729,7 @@ impl Tui {
             true => self
                 .searched_user
                 .as_mut()
-                .unwrap()
+                .expect("Failed to get searched user")
                 .repo_list
                 .get_filtered(),
             false => self.repo_list.clone(),
@@ -736,7 +739,7 @@ impl Tui {
             true => self
                 .searched_user
                 .as_mut()
-                .unwrap()
+                .expect("Failed to get searched user")
                 .repo_list
                 .state
                 .state
@@ -746,7 +749,10 @@ impl Tui {
 
         let mut repo_list_scrollbar_state = match self.show_su_data() {
             true => {
-                let su = self.searched_user.as_ref().unwrap();
+                let su = self
+                    .searched_user
+                    .as_ref()
+                    .expect("Failed to get searched user");
                 ScrollbarState::new(su.repo_list.state.items_len)
                     .position(su.repo_list.get_index().unwrap_or(0))
             }
@@ -858,68 +864,62 @@ impl Tui {
         let mut commit_list_scrollbar_state: ScrollbarState = ScrollbarState::default();
         let mut commit_list_state = ListState::default();
 
-        if self.show_su_data() {
-            repo_name = self.selected_repo_name_su().clone();
-        } else {
-            repo_name = self.selected_repo_name().clone();
-        }
-        match repo_name {
-            Some(r_name) => {
-                if self.show_su_data() {
-                    let su = self.searched_user.as_ref().expect("No repo with name");
-                    repo = su.user.repos.get(&r_name).unwrap();
-                    commit_list_items = repo.commits.iter().map(|c| c.to_string()).collect();
-                    commit_list_state = su.commit_list.state.clone();
-                    commit_list_scrollbar_state = ScrollbarState::new(su.commit_list.items_len)
-                        .position(self.commit_list.get_selected_index().unwrap_or(0));
+        // TODO: refactor more
+        repo_name = self.selected_repo_name();
+        if let Some(r_name) = repo_name {
+            if self.show_su_data() {
+                let su = self.searched_user.as_ref().expect("Failed to get su");
+                repo = su.user.repos.get(&r_name).unwrap();
+                commit_list_items = repo.commits.iter().map(|c| c.to_string()).collect();
+                commit_list_state = su.commit_list.state.clone();
+                commit_list_scrollbar_state = ScrollbarState::new(su.commit_list.items_len)
+                    .position(self.commit_list.get_selected_index().unwrap_or(0));
 
-                    let commit_i = su.commit_list.get_selected_index();
-                    if let Some(index) = commit_i {
-                        let commit = repo.commits.get(index).map(|c| c);
-                        commit_info_lines = match commit {
-                            Some(c) => commit_info_text(c),
-                            _ => Vec::default(),
-                        }
-                    }
-                } else {
-                    repo = self.user.git.repos.get(&r_name).expect("No repo with name");
-                    commit_list_items = repo.commits.iter().map(|c| c.to_string()).collect();
-                    commit_list_state = self.commit_list.state.clone();
-                    commit_list_scrollbar_state = ScrollbarState::new(self.commit_list.items_len)
-                        .position(self.commit_list.get_selected_index().unwrap_or(0));
-
-                    let commit_i = self.commit_list.get_selected_index();
-                    if let Some(index) = commit_i {
-                        let commit = repo.commits.get(index).map(|c| c);
-                        commit_info_lines = match commit {
-                            Some(c) => commit_info_text(c),
-                            _ => Vec::default(),
-                        }
+                let commit_i = su.commit_list.get_selected_index();
+                if let Some(index) = commit_i {
+                    let commit = repo.commits.get(index).map(|c| c);
+                    commit_info_lines = match commit {
+                        Some(c) => commit_info_text(c),
+                        _ => Vec::default(),
                     }
                 }
+            } else {
+                repo = self.user.git.repos.get(&r_name).expect("No repo with name");
+                commit_list_items = repo.commits.iter().map(|c| c.to_string()).collect();
+                commit_list_state = self.commit_list.state.clone();
+                commit_list_scrollbar_state = ScrollbarState::new(self.commit_list.items_len)
+                    .position(self.commit_list.get_selected_index().unwrap_or(0));
 
-                info_lines.push(Line::from(vec![Span::styled(
-                    repo.name.clone(),
-                    Style::default(),
-                )]));
-                info_lines.push(Line::from(vec![
-                    Span::styled("Description: ", Style::default()),
-                    Span::styled(repo.description.clone(), Style::default()),
-                ]));
-                info_lines.push(Line::from(vec![
-                    Span::styled("Language: ", Style::default()),
-                    Span::styled(repo.language.clone(), Style::default()),
-                ]));
-                info_lines.push(Line::from(vec![
-                    Span::styled("Last updated: ", Style::default()),
-                    Span::styled(repo.updated_at.clone().to_string(), Style::default()),
-                ]));
-                info_lines.push(Line::from(vec![
-                    Span::styled("Commits: ", Style::default()),
-                    Span::styled(repo.commits.len().to_string(), Style::default()),
-                ]));
+                let commit_i = self.commit_list.get_selected_index();
+                if let Some(index) = commit_i {
+                    let commit = repo.commits.get(index).map(|c| c);
+                    commit_info_lines = match commit {
+                        Some(c) => commit_info_text(c),
+                        _ => Vec::default(),
+                    }
+                }
             }
-            _ => {}
+
+            info_lines.push(Line::from(vec![Span::styled(
+                repo.name.clone(),
+                Style::default(),
+            )]));
+            info_lines.push(Line::from(vec![
+                Span::styled("Description: ", Style::default()),
+                Span::styled(repo.description.clone(), Style::default()),
+            ]));
+            info_lines.push(Line::from(vec![
+                Span::styled("Language: ", Style::default()),
+                Span::styled(repo.language.clone(), Style::default()),
+            ]));
+            info_lines.push(Line::from(vec![
+                Span::styled("Last updated: ", Style::default()),
+                Span::styled(repo.updated_at.clone().to_string(), Style::default()),
+            ]));
+            info_lines.push(Line::from(vec![
+                Span::styled("Commits: ", Style::default()),
+                Span::styled(repo.commits.len().to_string(), Style::default()),
+            ]));
         }
 
         let text = Text::from(info_lines);
