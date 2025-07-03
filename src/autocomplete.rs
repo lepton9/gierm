@@ -4,10 +4,22 @@ use std::{
 };
 
 #[derive(Debug)]
+pub struct Match {
+    pub dir: bool,
+    pub name: String,
+}
+
+impl Match {
+    pub fn new(name: String, dir: bool) -> Self {
+        Self { name, dir }
+    }
+}
+
+#[derive(Debug)]
 pub struct AutoComplete {
     pub input: String,
     pub cur_path: String,
-    pub matches: Vec<String>,
+    pub matches: Vec<Match>,
 }
 
 impl AutoComplete {
@@ -39,9 +51,9 @@ impl AutoComplete {
         self.matches.clear();
         let (dir, partial) = AutoComplete::split_input(&self.input);
         if partial == "." || partial == ".." {
-            self.matches.push(partial.to_string());
+            self.matches.push(Match::new(partial.to_string(), true));
             if partial == "." {
-                self.matches.push("..".to_string());
+                self.matches.push(Match::new("..".to_string(), true));
             }
         }
         if let Ok(entries) = fs::read_dir(dir) {
@@ -50,7 +62,10 @@ impl AutoComplete {
                     let file_name = entry.file_name();
                     let file_name_str = file_name.to_string_lossy();
                     if file_name_str.starts_with(&partial) {
-                        self.matches.push(file_name_str.to_string());
+                        self.matches.push(Match::new(
+                            file_name_str.to_string(),
+                            AutoComplete::is_directory(&self.add_to_cur_path(&file_name_str)),
+                        ));
                     }
                 }
             }
@@ -66,12 +81,20 @@ impl AutoComplete {
         }
     }
 
-    fn update_input_with_match(&mut self, one_match: &str) {
-        let new_input = format!("{}{}", AutoComplete::split_input(&self.input).0, one_match);
-        if AutoComplete::is_directory(&new_input) {
-            self.input = format!("{}/", new_input);
+    fn inputted_dir(&self) -> &str {
+        return AutoComplete::split_input(&self.input).0;
+    }
+
+    fn add_to_cur_path(&self, file: &str) -> String {
+        return format!("{}{}", self.inputted_dir(), file);
+    }
+
+    fn completed_input(path: &str, m: &Match) -> String {
+        let new_input = format!("{}{}", path, m.name);
+        if m.dir {
+            return format!("{}/", new_input);
         } else {
-            self.input = new_input;
+            return new_input;
         }
     }
 
@@ -80,7 +103,7 @@ impl AutoComplete {
         match self.matches.as_slice() {
             [] => None,
             [one_match] => {
-                self.update_input_with_match(&one_match.clone());
+                self.input = AutoComplete::completed_input(self.inputted_dir(), one_match);
                 return Some(true);
             }
             _ => Some(false),
