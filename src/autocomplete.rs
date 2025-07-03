@@ -36,9 +36,15 @@ impl AutoComplete {
     }
 
     pub fn update_matches(&mut self) {
+        self.matches.clear();
         let (dir, partial) = AutoComplete::split_input(&self.input);
+        if partial == "." || partial == ".." {
+            self.matches.push(partial.to_string());
+            if partial == "." {
+                self.matches.push("..".to_string());
+            }
+        }
         if let Ok(entries) = fs::read_dir(dir) {
-            self.matches.clear();
             for entry in entries {
                 if let Ok(entry) = entry {
                     let file_name = entry.file_name();
@@ -70,9 +76,6 @@ impl AutoComplete {
     }
 
     pub fn complete(&mut self) -> Option<bool> {
-        if self.input.ends_with("..") && !self.input.ends_with("../") {
-            self.add_char('/');
-        }
         self.update_matches();
         match self.matches.as_slice() {
             [] => None,
