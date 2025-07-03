@@ -24,16 +24,18 @@ impl Match {
 
 #[derive(Debug)]
 pub struct AutoComplete {
-    pub input: String,
-    pub cur_path: String,
-    pub matches: Vec<Match>,
-    pub selected_match: Option<usize>,
+    input: String,
+    input_changed: bool,
+    cur_path: String,
+    matches: Vec<Match>,
+    selected_match: Option<usize>,
 }
 
 impl AutoComplete {
     pub fn new() -> Self {
         Self {
             input: "".to_string(),
+            input_changed: false,
             cur_path: "".to_string(),
             matches: Vec::new(),
             selected_match: None,
@@ -42,18 +44,25 @@ impl AutoComplete {
 
     pub fn update_input(&mut self, input: String) {
         self.input = input;
+        self.input_changed = true;
     }
 
     pub fn add_char(&mut self, c: char) {
         self.input.push(c);
+        self.input_changed = true;
     }
 
-    pub fn valid_path(path: &String) -> bool {
+    fn valid_path(path: &String) -> bool {
         fs::metadata(path).is_ok()
     }
 
     fn is_directory(path: &str) -> bool {
         fs::metadata(path).map(|m| m.is_dir()).unwrap_or(false)
+    }
+
+    pub fn clear_matches(&mut self) {
+        self.matches.clear();
+        self.selected_match = None;
     }
 
     pub fn selected(&self) -> Option<&Match> {
@@ -71,8 +80,8 @@ impl AutoComplete {
         }
     }
 
-    pub fn update_matches(&mut self) {
-        self.matches.clear();
+    fn update_matches(&mut self) {
+        self.clear_matches();
         let (dir, partial) = AutoComplete::split_input(&self.input);
         if partial == "." || partial == ".." {
             self.matches.push(Match::new(partial.to_string(), true));
@@ -118,14 +127,29 @@ impl AutoComplete {
     }
 
     pub fn complete(&mut self) -> Option<bool> {
-        self.update_matches();
+        if self.input_changed {
+            self.input_changed = false;
+            self.update_matches();
+        }
         match self.matches.as_slice() {
-            [] => None,
+            [] => {
+                self.clear_matches();
+                return None;
+            }
             [one_match] => {
-                self.input = AutoComplete::completed_input(self.inputted_dir(), one_match);
+                self.update_input(AutoComplete::completed_input(
+                    self.inputted_dir(),
+                    one_match,
+                ));
+                self.clear_matches();
                 return Some(true);
             }
-            _ => Some(false),
+            _ => {
+                if !self.input_changed {
+                    self.select_next();
+                }
+                return Some(false);
+            }
         }
     }
 
