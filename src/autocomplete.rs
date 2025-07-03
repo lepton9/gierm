@@ -31,6 +31,10 @@ impl AutoComplete {
         fs::metadata(path).is_ok()
     }
 
+    fn is_directory(path: &str) -> bool {
+        fs::metadata(path).map(|m| m.is_dir()).unwrap_or(false)
+    }
+
     pub fn update_matches(&mut self) {
         let (dir, partial) = AutoComplete::split_input(&self.input);
         if let Ok(entries) = fs::read_dir(dir) {
@@ -56,6 +60,15 @@ impl AutoComplete {
         }
     }
 
+    fn update_input_with_match(&mut self, one_match: &str) {
+        let new_input = format!("{}{}", AutoComplete::split_input(&self.input).0, one_match);
+        if AutoComplete::is_directory(&new_input) {
+            self.input = format!("{}/", new_input);
+        } else {
+            self.input = new_input;
+        }
+    }
+
     pub fn complete(&mut self) -> Option<bool> {
         if self.input.ends_with("..") && !self.input.ends_with("../") {
             self.add_char('/');
@@ -64,8 +77,8 @@ impl AutoComplete {
         match self.matches.as_slice() {
             [] => None,
             [one_match] => {
-                self.input = format!("{}{}", AutoComplete::split_input(&self.input).0, one_match);
-                Some(true)
+                self.update_input_with_match(&one_match.clone());
+                return Some(true);
             }
             _ => Some(false),
         }
