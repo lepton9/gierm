@@ -5,13 +5,20 @@ use std::{
 
 #[derive(Debug)]
 pub struct Match {
-    pub dir: bool,
-    pub name: String,
+    dir: bool,
+    name: String,
 }
 
 impl Match {
     pub fn new(name: String, dir: bool) -> Self {
         Self { name, dir }
+    }
+
+    pub fn to_string(&self) -> String {
+        if self.dir {
+            return format!("{}/", self.name);
+        }
+        return self.name.clone();
     }
 }
 
@@ -107,12 +114,7 @@ impl AutoComplete {
     }
 
     fn completed_input(path: &str, m: &Match) -> String {
-        let new_input = format!("{}{}", path, m.name);
-        if m.dir {
-            return format!("{}/", new_input);
-        } else {
-            return new_input;
-        }
+        return format!("{}{}", path, m.to_string());
     }
 
     pub fn complete(&mut self) -> Option<bool> {
