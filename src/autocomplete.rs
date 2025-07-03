@@ -27,6 +27,10 @@ impl AutoComplete {
         self.input.push(c);
     }
 
+    pub fn valid_path(path: &String) -> bool {
+        fs::metadata(path).is_ok()
+    }
+
     pub fn update_matches(&mut self) {
         let (dir, partial) = AutoComplete::split_input(&self.input);
 
@@ -54,16 +58,22 @@ impl AutoComplete {
         }
     }
 
-    pub fn complete(&mut self) {
+    pub fn complete(&mut self) -> Option<bool> {
         self.update_matches();
-        if self.matches.len() == 1 {
-            self.input = format!(
-                "{}{}",
-                AutoComplete::split_input(&self.input).0,
-                self.matches[0]
-            );
-        } else {
-            self.print_matches();
+        match self.matches.len() {
+            0 => None,
+            1 => {
+                self.input = format!(
+                    "{}{}",
+                    AutoComplete::split_input(&self.input).0,
+                    self.matches[0]
+                );
+                return Some(true);
+            }
+            _n => {
+                self.print_matches();
+                return Some(false);
+            }
         }
     }
 
