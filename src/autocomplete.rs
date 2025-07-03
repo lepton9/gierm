@@ -20,6 +20,7 @@ pub struct AutoComplete {
     pub input: String,
     pub cur_path: String,
     pub matches: Vec<Match>,
+    pub selected_match: Option<usize>,
 }
 
 impl AutoComplete {
@@ -28,6 +29,7 @@ impl AutoComplete {
             input: "".to_string(),
             cur_path: "".to_string(),
             matches: Vec::new(),
+            selected_match: None,
         }
     }
 
@@ -45,6 +47,21 @@ impl AutoComplete {
 
     fn is_directory(path: &str) -> bool {
         fs::metadata(path).map(|m| m.is_dir()).unwrap_or(false)
+    }
+
+    pub fn selected(&self) -> Option<&Match> {
+        return self.selected_match.and_then(|i| self.matches.get(i));
+    }
+
+    pub fn select_next(&mut self) {
+        if self.matches.is_empty() {
+            self.selected_match = None;
+        } else {
+            self.selected_match = Some(
+                self.selected_match
+                    .map_or(0, |i| (i + 1) % self.matches.len()),
+            );
+        }
     }
 
     pub fn update_matches(&mut self) {
