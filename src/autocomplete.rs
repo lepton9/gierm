@@ -52,6 +52,15 @@ impl AutoComplete {
         self.input_changed = true;
     }
 
+    pub fn delete_char(&mut self) {
+        self.input.pop();
+        self.input_changed = true;
+    }
+
+    pub fn get_input(&self) -> String {
+        return self.input.clone();
+    }
+
     fn valid_path(path: &String) -> bool {
         fs::metadata(path).is_ok()
     }
@@ -126,6 +135,10 @@ impl AutoComplete {
         return format!("{}{}", path, m.to_string());
     }
 
+    pub fn input_with_match(&self, m: &Match) -> String {
+        return AutoComplete::completed_input(self.inputted_dir(), m);
+    }
+
     pub fn complete(&mut self) -> Option<bool> {
         if self.input_changed {
             self.input_changed = false;
@@ -137,10 +150,7 @@ impl AutoComplete {
                 return None;
             }
             [one_match] => {
-                self.update_input(AutoComplete::completed_input(
-                    self.inputted_dir(),
-                    one_match,
-                ));
+                self.update_input(self.input_with_match(one_match));
                 self.clear_matches();
                 return Some(true);
             }

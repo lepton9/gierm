@@ -1,12 +1,8 @@
 use crate::filterlist::FilterList;
 use crate::git::GitUser;
+use crate::input;
 use crate::{api, git};
-use crossterm::cursor;
 use crossterm::event::{Event, KeyCode, KeyEventKind};
-use crossterm::{
-    cursor::{MoveLeft, MoveRight, RestorePosition, SavePosition},
-    ExecutableCommand,
-};
 use ratatui::{
     layout::{Constraint, Layout, Margin, Position},
     style::{Style, Stylize},
@@ -391,59 +387,6 @@ fn exec_command(cmd: Cmd) -> Result<String, GiermError> {
     }
 }
 
-pub fn ask_confirmation(prompt: String, input_beg: &String) -> std::io::Result<(bool, String)> {
-    crossterm::terminal::enable_raw_mode()?;
-    let mut cursor = crate::cursor::Cursor::new();
-    let mut input: String = String::default();
-    let mut cout = std::io::stdout();
-    writeln!(&mut cout, "{}", prompt)?;
-    cout.execute(cursor::MoveToColumn(0))?;
-    write!(&mut cout, "{}[2K > {} {}", 27 as char, input_beg, input)?;
-    cout.flush()?;
-    loop {
-        match crossterm::event::read()? {
-            Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
-                KeyCode::Esc => {
-                    crossterm::terminal::disable_raw_mode()?;
-                    println!();
-                    return Ok((false, "".to_string()));
-                }
-                KeyCode::Left => {
-                    if cursor.c_left(input.len()) {
-                        cout.execute(MoveLeft(1))?;
-                    }
-                }
-                KeyCode::Right => {
-                    if cursor.c_right() {
-                        cout.execute(MoveRight(1))?;
-                    }
-                }
-                KeyCode::Enter => {
-                    crossterm::terminal::disable_raw_mode()?;
-                    println!();
-                    return Ok((true, input));
-                }
-                KeyCode::Backspace => {
-                    if cursor.remove_at_cursor(&mut input) {
-                        cout.execute(MoveLeft(1))?;
-                    }
-                }
-                KeyCode::Char(c) => {
-                    cursor.insert_at_cursor(&mut input, c);
-                    cout.execute(MoveRight(1))?;
-                }
-                _ => {}
-            },
-            _ => {}
-        }
-        cout.execute(SavePosition)?;
-        cout.execute(cursor::MoveToColumn(0))?;
-        write!(&mut cout, "{}[2K > {} {}", 27 as char, input_beg, input)?;
-        cout.flush()?;
-        cout.execute(RestorePosition)?;
-    }
-}
-
 pub async fn run_list_selector(
     user: crate::git::User,
     username: String,
@@ -451,7 +394,7 @@ pub async fn run_list_selector(
     command: crate::args::Command,
 ) -> Result<(), GiermError> {
     let mut list_tui: ListSearchTui;
-    if let Some(mut git_user) = crate::api::search_gituser(&user, &username).await {
+    if let Some(git_user) = crate::api::search_gituser(&user, &username).await {
         let all_repos: Vec<String> = git_user.repos.keys().cloned().collect();
         let fl = FilterList::new(all_repos, filter);
         list_tui = ListSearchTui::new(user, Some(git_user), username, command, fl);
@@ -468,7 +411,7 @@ pub async fn run_list_selector(
     let cmd = list_tui.run().await;
     if let Some(command) = cmd {
         let cmd_str = command.to_string();
-        let input_res = ask_confirmation("Enter file path:".to_string(), &cmd_str);
+        let input_res = input::ask_path("Enter file path:".to_string(), &cmd_str);
         match input_res {
             Ok((true, input)) => {
                 if let Ok(out) = exec_command(

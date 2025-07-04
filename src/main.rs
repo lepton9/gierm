@@ -7,6 +7,7 @@ mod autocomplete;
 mod cursor;
 mod filterlist;
 mod git;
+mod input;
 mod layout;
 mod listtui;
 mod tui;
@@ -106,7 +107,7 @@ async fn login_user() -> Option<git::User> {
     if username.is_empty() {
         println!("No existing user. Login with Github user.");
         if let Ok((confirm, input)) =
-            listtui::ask_confirmation("Enter username".to_string(), &"".to_string())
+            input::ask_input("Enter username".to_string(), &"".to_string())
         {
             if !confirm {
                 return None;
