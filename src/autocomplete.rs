@@ -1,7 +1,4 @@
-use std::{
-    fs,
-    io::{self, Write},
-};
+use std::fs;
 
 pub enum CompletionError {
     NoSelectedMatch,
@@ -64,6 +61,10 @@ impl AutoComplete {
 
     pub fn get_input(&self) -> String {
         return self.input.clone();
+    }
+
+    pub fn get_matches(&self) -> Vec<String> {
+        return self.matches.iter().map(|m| m.to_string()).collect();
     }
 
     fn valid_path(path: &String) -> bool {
