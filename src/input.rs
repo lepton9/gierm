@@ -91,6 +91,13 @@ pub fn ask_path(prompt: String, input_beg: &String) -> std::io::Result<(bool, St
                 }
                 KeyCode::Enter => {
                     if choosing_match {
+                        match complete.accept_selected_match() {
+                            Ok(_) => {
+                                choosing_match = false;
+                                input = complete.get_input();
+                            }
+                            _ => {}
+                        }
                     } else {
                         crossterm::terminal::disable_raw_mode()?;
                         println!();
@@ -98,6 +105,7 @@ pub fn ask_path(prompt: String, input_beg: &String) -> std::io::Result<(bool, St
                     }
                 }
                 KeyCode::Backspace => {
+                    choosing_match = false;
                     if cursor.remove_at_cursor(&mut input) {
                         complete.update_input(input.clone());
                         cout.execute(MoveLeft(1))?;
@@ -110,7 +118,9 @@ pub fn ask_path(prompt: String, input_beg: &String) -> std::io::Result<(bool, St
                             input = complete.get_input();
                         }
                         Some(false) => {
-                            //
+                            if choosing_match {
+                                complete.select_next();
+                            }
                             choosing_match = true;
                         }
                         _ => {
@@ -120,8 +130,19 @@ pub fn ask_path(prompt: String, input_beg: &String) -> std::io::Result<(bool, St
                     }
                 }
                 KeyCode::Char(c) => {
+                    if choosing_match {
+                        match complete.accept_selected_match() {
+                            Ok(_) => {
+                                choosing_match = false;
+                                input = complete.get_input();
+                                cursor.reset();
+                            }
+                            _ => {}
+                        }
+                    }
                     cursor.insert_at_cursor(&mut input, c);
                     complete.update_input(input.clone());
+                    // TODO: cursor placement
                     cout.execute(MoveRight(1))?;
                 }
                 _ => {}

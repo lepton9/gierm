@@ -3,6 +3,11 @@ use std::{
     io::{self, Write},
 };
 
+pub enum CompletionError {
+    NoSelectedMatch,
+    NoMatches,
+}
+
 #[derive(Debug)]
 pub struct Match {
     dir: bool,
@@ -137,6 +142,14 @@ impl AutoComplete {
 
     pub fn input_with_match(&self, m: &Match) -> String {
         return AutoComplete::completed_input(self.inputted_dir(), m);
+    }
+
+    pub fn accept_selected_match(&mut self) -> Result<(), CompletionError> {
+        let m = self.selected().ok_or(CompletionError::NoSelectedMatch)?;
+        self.update_input(self.input_with_match(m));
+        self.input_changed = false;
+        self.clear_matches();
+        return Ok(());
     }
 
     pub fn complete(&mut self) -> Option<bool> {
