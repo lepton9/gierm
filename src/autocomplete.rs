@@ -37,7 +37,7 @@ impl AutoComplete {
     pub fn new() -> Self {
         Self {
             input: "".to_string(),
-            input_changed: false,
+            input_changed: true,
             cur_path: "".to_string(),
             matches: Vec::new(),
             selected_match: None,
@@ -82,6 +82,10 @@ impl AutoComplete {
 
     pub fn selected(&self) -> Option<&Match> {
         return self.selected_match.and_then(|i| self.matches.get(i));
+    }
+
+    pub fn selected_index(&self) -> Option<usize> {
+        return self.selected_match;
     }
 
     pub fn select_next(&mut self) {
@@ -148,16 +152,19 @@ impl AutoComplete {
     pub fn accept_selected_match(&mut self) -> Result<(), CompletionError> {
         let m = self.selected().ok_or(CompletionError::NoSelectedMatch)?;
         self.update_input(self.input_with_match(m));
-        self.input_changed = false;
+        self.input_changed = true;
         self.clear_matches();
         return Ok(());
     }
 
     pub fn complete(&mut self) -> Option<bool> {
-        if self.input_changed {
+        let updated = if self.input_changed {
             self.input_changed = false;
             self.update_matches();
-        }
+            true
+        } else {
+            false
+        };
         match self.matches.as_slice() {
             [] => {
                 self.clear_matches();
@@ -169,7 +176,7 @@ impl AutoComplete {
                 return Some(true);
             }
             _ => {
-                if !self.input_changed {
+                if !updated {
                     self.select_next();
                 }
                 return Some(false);

@@ -118,9 +118,7 @@ pub fn ask_path(prompt: String, input_beg: &String) -> std::io::Result<(bool, St
                             input = complete.get_input();
                         }
                         Some(false) => {
-                            if choosing_match {
-                                complete.select_next();
-                            }
+                            //
                             choosing_match = true;
                         }
                         _ => {
