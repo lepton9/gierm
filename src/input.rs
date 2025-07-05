@@ -67,8 +67,6 @@ pub fn ask_path(prompt: String, input_beg: &String) -> std::io::Result<(bool, St
     let mut complete = AutoComplete::new();
     let mut choosing_match: bool = false;
     let mut cout = std::io::stdout();
-    let match_item_width = 30;
-    let item_spacing = 2;
     writeln!(&mut cout, "{}", prompt)?;
     cout.execute(cursor::MoveToColumn(0))?;
     cout.execute(crossterm::terminal::Clear(
@@ -77,6 +75,7 @@ pub fn ask_path(prompt: String, input_beg: &String) -> std::io::Result<(bool, St
     write!(&mut cout, " > {} {}", input_beg, input)?;
     cout.flush()?;
     loop {
+        display_path_content(&mut cout, choosing_match, &complete, input_beg, &input)?;
         match crossterm::event::read()? {
             Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
                 KeyCode::Esc => {
@@ -152,47 +151,6 @@ pub fn ask_path(prompt: String, input_beg: &String) -> std::io::Result<(bool, St
             },
             _ => {}
         }
-        cout.execute(SavePosition)?;
-        cout.execute(cursor::MoveToColumn(0))?;
-        cout.execute(crossterm::terminal::Clear(
-            crossterm::terminal::ClearType::CurrentLine,
-        ))?;
-        if choosing_match {
-            if let Some(m) = complete.selected() {
-                write!(
-                    &mut cout,
-                    " > {} {}",
-                    input_beg,
-                    complete.input_with_match(m)
-                )?;
-            } else {
-                write!(&mut cout, " > {} {}", input_beg, input)?;
-            }
-
-            cout.execute(RestorePosition)?;
-            let matches = complete.get_matches();
-            let scroll = calc_scroll_amount(&matches, match_item_width, item_spacing);
-            if scroll > 0 {
-                cout.execute(crossterm::terminal::ScrollUp(scroll as u16))?;
-                cout.execute(cursor::MoveUp(scroll as u16))?;
-            }
-            cout.execute(SavePosition)?;
-            display_items(
-                &mut cout,
-                matches,
-                complete.selected_index(),
-                match_item_width,
-                item_spacing,
-            )?;
-            cout.execute(RestorePosition)?;
-        } else {
-            cout.execute(crossterm::terminal::Clear(
-                crossterm::terminal::ClearType::FromCursorDown,
-            ))?;
-            write!(&mut cout, " > {} {}", input_beg, input)?;
-            cout.execute(RestorePosition)?;
-        }
-        cout.flush()?;
     }
 }
 
@@ -213,6 +171,54 @@ pub fn calc_scroll_amount(items: &Vec<String>, item_width: usize, spacing: usize
     } else {
         0
     };
+}
+
+pub fn display_path_content(
+    cout: &mut std::io::Stdout,
+    choosing_match: bool,
+    complete: &AutoComplete,
+    input_beg: &String,
+    input: &String,
+) -> std::io::Result<()> {
+    let match_item_width = 30;
+    let item_spacing = 2;
+    cout.execute(SavePosition)?;
+    cout.execute(cursor::MoveToColumn(0))?;
+    cout.execute(crossterm::terminal::Clear(
+        crossterm::terminal::ClearType::CurrentLine,
+    ))?;
+    if choosing_match {
+        if let Some(m) = complete.selected() {
+            write!(cout, " > {} {}", input_beg, complete.input_with_match(m))?;
+        } else {
+            write!(cout, " > {} {}", input_beg, input)?;
+        }
+
+        cout.execute(RestorePosition)?;
+        let matches = complete.get_matches();
+        let scroll = calc_scroll_amount(&matches, match_item_width, item_spacing);
+        if scroll > 0 {
+            cout.execute(crossterm::terminal::ScrollUp(scroll as u16))?;
+            cout.execute(cursor::MoveUp(scroll as u16))?;
+        }
+        cout.execute(SavePosition)?;
+        display_items(
+            cout,
+            matches,
+            complete.selected_index(),
+            match_item_width,
+            item_spacing,
+        )?;
+        cout.execute(RestorePosition)?;
+    } else {
+        cout.execute(crossterm::terminal::Clear(
+            crossterm::terminal::ClearType::FromCursorDown,
+        ))?;
+        write!(cout, " > {} {}", input_beg, input)?;
+        cout.execute(RestorePosition)?;
+    }
+    cout.flush()?;
+    return Ok(());
 }
 
 pub fn display_items(
