@@ -67,9 +67,14 @@ pub fn ask_path(prompt: String, input_beg: &String) -> std::io::Result<(bool, St
     let mut complete = AutoComplete::new();
     let mut choosing_match: bool = false;
     let mut cout = std::io::stdout();
+    let match_item_width = 30;
+    let item_spacing = 2;
     writeln!(&mut cout, "{}", prompt)?;
     cout.execute(cursor::MoveToColumn(0))?;
-    write!(&mut cout, "{}[2K > {} {}", 27 as char, input_beg, input)?;
+    cout.execute(crossterm::terminal::Clear(
+        crossterm::terminal::ClearType::FromCursorDown,
+    ))?;
+    write!(&mut cout, " > {} {}", input_beg, input)?;
     cout.flush()?;
     loop {
         match crossterm::event::read()? {
@@ -163,13 +168,95 @@ pub fn ask_path(prompt: String, input_beg: &String) -> std::io::Result<(bool, St
             } else {
                 write!(&mut cout, " > {} {}", input_beg, input)?;
             }
-            // TODO: display the matches
+
+            cout.execute(RestorePosition)?;
+            let matches = complete.get_matches();
+            let scroll = calc_scroll_amount(&matches, match_item_width, item_spacing);
+            if scroll > 0 {
+                cout.execute(crossterm::terminal::ScrollUp(scroll as u16))?;
+                cout.execute(cursor::MoveUp(scroll as u16))?;
+            }
+            cout.execute(SavePosition)?;
+            display_items(
+                &mut cout,
+                matches,
+                complete.selected_index(),
+                match_item_width,
+                item_spacing,
+            )?;
+            cout.execute(RestorePosition)?;
         } else {
+            cout.execute(crossterm::terminal::Clear(
+                crossterm::terminal::ClearType::FromCursorDown,
+            ))?;
             write!(&mut cout, " > {} {}", input_beg, input)?;
+            cout.execute(RestorePosition)?;
         }
         cout.flush()?;
-        cout.execute(RestorePosition)?;
     }
 }
 
-pub fn display_items(items: Vec<String>) {}
+pub fn calc_scroll_amount(items: &Vec<String>, item_width: usize, spacing: usize) -> usize {
+    let (term_width, term_height) = {
+        let (w, h) = crossterm::terminal::size().unwrap_or((80, 24));
+        (w as usize, h as usize)
+    };
+    let items_on_line = if (item_width + spacing) > 0 {
+        term_width / (item_width + spacing)
+    } else {
+        1
+    };
+    let needed_height: usize = (items.len() + items_on_line - 1) / items_on_line;
+    let line = cursor::position().unwrap_or((0, term_height as u16 - 1)).1 as usize + 1;
+    return if needed_height > (term_height - line) {
+        needed_height - (term_height - line)
+    } else {
+        0
+    };
+}
+
+pub fn display_items(
+    cout: &mut std::io::Stdout,
+    items: Vec<String>,
+    selected: Option<usize>,
+    item_width: usize,
+    spacing: usize,
+) -> std::io::Result<()> {
+    let (term_width, term_height) = {
+        let (w, h) = crossterm::terminal::size()?;
+        (w as usize, h as usize)
+    };
+    let mut current_line_length = 0;
+    let total_item_width = item_width + spacing;
+
+    cout.execute(cursor::MoveToColumn(0))?;
+    cout.execute(cursor::MoveToNextLine(1))?;
+    cout.execute(crossterm::terminal::Clear(
+        crossterm::terminal::ClearType::FromCursorDown,
+    ))?;
+    for (index, item) in items.iter().enumerate() {
+        if current_line_length + total_item_width > term_width {
+            cout.execute(cursor::MoveToNextLine(1))?;
+            cout.execute(cursor::MoveToColumn(0))?;
+            cout.execute(crossterm::terminal::Clear(
+                crossterm::terminal::ClearType::CurrentLine,
+            ))?;
+            current_line_length = 0;
+        }
+
+        if Some(index) == selected {
+            cout.execute(crossterm::style::SetAttribute(
+                crossterm::style::Attribute::Reverse,
+            ))?;
+            write!(cout, "{:<w$}", item, w = item_width)?;
+            cout.execute(crossterm::style::SetAttribute(
+                crossterm::style::Attribute::NoReverse,
+            ))?;
+            write!(cout, "{}", " ".repeat(spacing))?;
+        } else {
+            write!(cout, "{:<w$}{}", item, " ".repeat(spacing), w = item_width)?;
+        }
+        current_line_length += total_item_width;
+    }
+    return Ok(());
+}
