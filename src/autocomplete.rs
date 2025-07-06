@@ -115,12 +115,15 @@ impl AutoComplete {
 
     fn update_matches(&mut self) {
         self.clear_matches();
-        let (dir, partial) = AutoComplete::split_input(&self.input);
+        let (mut dir, partial) = AutoComplete::split_input(&self.input);
         if partial == "." || partial == ".." {
             self.matches.push(Match::new(partial.to_string(), true));
             if partial == "." {
                 self.matches.push(Match::new("..".to_string(), true));
             }
+        }
+        if dir.is_empty() {
+            dir = "./";
         }
         if let Ok(entries) = fs::read_dir(dir) {
             for entry in entries {
@@ -143,7 +146,7 @@ impl AutoComplete {
             let (dir, partial) = input.split_at(pos + 1);
             (dir, partial)
         } else {
-            ("./", &input)
+            ("", &input)
         }
     }
 
