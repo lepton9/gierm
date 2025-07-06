@@ -50,7 +50,9 @@ impl Cmd {
     }
 
     pub fn push_arg(&mut self, arg: String) {
-        self.args.push(arg);
+        if !arg.is_empty() {
+            self.args.push(arg);
+        }
     }
 
     pub fn from_str(cmd_str: String) -> Option<Self> {
