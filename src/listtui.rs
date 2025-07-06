@@ -14,12 +14,10 @@ use ratatui::{
     },
     Frame,
 };
-use std::process::Command;
 use Constraint::{Length, Min};
 
 pub enum GiermError {
     NotFoundError,
-    CmdExecError,
 }
 
 enum ListTuiMode {
@@ -334,29 +332,6 @@ impl ListSearchTui {
     }
 }
 
-fn exec_command(cmd: Cmd) -> Result<String, GiermError> {
-    let mut command = Command::new(cmd.cmd);
-    for arg in cmd.args.iter() {
-        command.arg(arg);
-    }
-
-    match command.output() {
-        Ok(output) => {
-            if output.stderr.is_empty() {
-                let out: String = String::from_utf8(output.stdout).unwrap_or_default();
-                return Ok(out);
-            } else {
-                let err: String = String::from_utf8(output.stderr).unwrap_or_default();
-                return Ok(err);
-            }
-        }
-        Err(e) => {
-            // return Err(e);
-            return Err(GiermError::CmdExecError);
-        }
-    }
-}
-
 pub async fn run_list_selector(
     user: crate::git::User,
     username: String,
@@ -385,8 +360,13 @@ pub async fn run_list_selector(
         match input_res {
             Ok((true, input)) => {
                 command.push_arg(input.trim().to_string());
-                if let Ok(out) = exec_command(command) {
-                    println!("{}", out);
+                match command.exec() {
+                    Ok(out) => {
+                        println!("{}", out);
+                    }
+                    Err((e, out)) => {
+                        println!("Error: {}", out);
+                    }
                 }
             }
             _ => {}

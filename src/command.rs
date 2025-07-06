@@ -1,6 +1,12 @@
+use std::process::Command;
+
 pub enum CmdType {
     CLONE,
     DEFAULT,
+}
+
+pub enum CmdError {
+    CmdExecError,
 }
 
 pub fn command_type(cmd: &String) -> Option<CmdType> {
@@ -60,5 +66,24 @@ impl Cmd {
     pub fn to_string(&self) -> String {
         let cmd_str = format!("{} {}", self.cmd, self.args.join(" "));
         return cmd_str;
+    }
+
+    pub fn exec(&self) -> Result<String, (CmdError, String)> {
+        let mut command = Command::new(self.cmd.clone());
+        self.args.iter().for_each(|arg| {
+            command.arg(arg);
+        });
+        match command.output() {
+            Ok(output) => {
+                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                if output.status.success() {
+                    Ok(stdout)
+                } else {
+                    Err((CmdError::CmdExecError, stderr))
+                }
+            }
+            Err(e) => Err((CmdError::CmdExecError, e.to_string())),
+        }
     }
 }
