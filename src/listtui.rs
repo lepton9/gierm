@@ -1,7 +1,7 @@
+use crate::api;
 use crate::filterlist::FilterList;
 use crate::git::GitUser;
 use crate::input;
-use crate::{api, git};
 use crossterm::event::{Event, KeyCode, KeyEventKind};
 use ratatui::{
     layout::{Constraint, Layout, Margin, Position},
@@ -13,7 +13,7 @@ use ratatui::{
     },
     Frame,
 };
-use std::{io::Write, process::Command};
+use std::process::Command;
 use Constraint::{Length, Min};
 
 #[derive(Default)]

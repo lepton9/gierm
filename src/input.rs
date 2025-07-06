@@ -1,11 +1,10 @@
-use crate::autocomplete::AutoComplete;
 use crossterm::cursor;
 use crossterm::event::{Event, KeyCode, KeyEventKind};
 use crossterm::{
     cursor::{MoveLeft, MoveRight, RestorePosition, SavePosition},
     ExecutableCommand,
 };
-use std::{io::Write, process::Command};
+use std::io::Write;
 
 pub fn ask_input(prompt: String, input_beg: &String) -> std::io::Result<(bool, String)> {
     crossterm::terminal::enable_raw_mode()?;
@@ -64,7 +63,7 @@ pub fn ask_path(prompt: String, input_beg: &String) -> std::io::Result<(bool, St
     crossterm::terminal::enable_raw_mode()?;
     let mut cursor = crate::cursor::Cursor::new();
     let mut input: String = String::default();
-    let mut complete = AutoComplete::new();
+    let mut complete = crate::autocomplete::AutoComplete::new();
     let mut choosing_match: bool = false;
     let mut cout = std::io::stdout();
     writeln!(&mut cout, "{}", prompt)?;
@@ -93,18 +92,24 @@ pub fn ask_path(prompt: String, input_beg: &String) -> std::io::Result<(bool, St
                     cursor.c_right();
                 }
                 KeyCode::Enter => {
-                    if choosing_match {
-                        accept_match(&mut complete, &mut cursor, &mut choosing_match, &mut input);
+                    let accepted = if choosing_match {
+                        accept_match(&mut complete, &mut cursor, &mut choosing_match, &mut input)
                     } else {
+                        false
+                    };
+                    if !accepted {
                         crossterm::terminal::disable_raw_mode()?;
                         println!();
                         return Ok((true, input));
                     }
                 }
                 KeyCode::Backspace => {
-                    if choosing_match {
-                        accept_match(&mut complete, &mut cursor, &mut choosing_match, &mut input);
-                    } else if cursor.remove_at_cursor(&mut input) {
+                    let accepted = if choosing_match {
+                        accept_match(&mut complete, &mut cursor, &mut choosing_match, &mut input)
+                    } else {
+                        false
+                    };
+                    if !accepted && cursor.remove_at_cursor(&mut input) {
                         complete.update_input(input.clone());
                     }
                 }
@@ -141,16 +146,18 @@ pub fn ask_path(prompt: String, input_beg: &String) -> std::io::Result<(bool, St
 }
 
 fn accept_match(
-    complete: &mut AutoComplete,
+    complete: &mut crate::autocomplete::AutoComplete,
     cursor: &mut crate::cursor::Cursor,
     choosing_match: &mut bool,
     input: &mut String,
-) {
+) -> bool {
     if let Ok(_) = complete.accept_selected_match() {
         *choosing_match = false;
         *input = complete.get_input();
         cursor.reset();
+        return true;
     }
+    return false;
 }
 
 pub fn calc_scroll_amount(items: &Vec<String>, item_width: usize, spacing: usize) -> usize {
@@ -185,7 +192,7 @@ pub fn update_cursor_pos(
 pub fn display_path_content(
     cout: &mut std::io::Stdout,
     choosing_match: bool,
-    complete: &AutoComplete,
+    complete: &crate::autocomplete::AutoComplete,
     input_beg: &String,
     input: &String,
 ) -> std::io::Result<()> {
