@@ -76,6 +76,9 @@ pub fn ask_path(prompt: String, input_beg: &String) -> std::io::Result<(bool, St
     cout.flush()?;
     loop {
         display_path_content(&mut cout, choosing_match, &complete, input_beg, &input)?;
+        if !choosing_match {
+            update_cursor_pos(&mut cout, &cursor)?;
+        }
         match crossterm::event::read()? {
             Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
                 KeyCode::Esc => {
@@ -84,24 +87,14 @@ pub fn ask_path(prompt: String, input_beg: &String) -> std::io::Result<(bool, St
                     return Ok((false, "".to_string()));
                 }
                 KeyCode::Left => {
-                    if cursor.c_left(input.len()) {
-                        cout.execute(MoveLeft(1))?;
-                    }
+                    cursor.c_left(input.len());
                 }
                 KeyCode::Right => {
-                    if cursor.c_right() {
-                        cout.execute(MoveRight(1))?;
-                    }
+                    cursor.c_right();
                 }
                 KeyCode::Enter => {
                     if choosing_match {
-                        match complete.accept_selected_match() {
-                            Ok(_) => {
-                                choosing_match = false;
-                                input = complete.get_input();
-                            }
-                            _ => {}
-                        }
+                        accept_match(&mut complete, &mut cursor, &mut choosing_match, &mut input);
                     } else {
                         crossterm::terminal::disable_raw_mode()?;
                         println!();
@@ -109,10 +102,10 @@ pub fn ask_path(prompt: String, input_beg: &String) -> std::io::Result<(bool, St
                     }
                 }
                 KeyCode::Backspace => {
-                    choosing_match = false;
-                    if cursor.remove_at_cursor(&mut input) {
+                    if choosing_match {
+                        accept_match(&mut complete, &mut cursor, &mut choosing_match, &mut input);
+                    } else if cursor.remove_at_cursor(&mut input) {
                         complete.update_input(input.clone());
-                        cout.execute(MoveLeft(1))?;
                     }
                 }
                 KeyCode::Tab => {
@@ -120,6 +113,7 @@ pub fn ask_path(prompt: String, input_beg: &String) -> std::io::Result<(bool, St
                         Some(true) => {
                             choosing_match = false;
                             input = complete.get_input();
+                            cursor.reset();
                         }
                         Some(false) => {
                             //
@@ -133,24 +127,31 @@ pub fn ask_path(prompt: String, input_beg: &String) -> std::io::Result<(bool, St
                 }
                 KeyCode::Char(c) => {
                     if choosing_match {
-                        match complete.accept_selected_match() {
-                            Ok(_) => {
-                                choosing_match = false;
-                                input = complete.get_input();
-                                cursor.reset();
-                            }
-                            _ => {}
-                        }
+                        accept_match(&mut complete, &mut cursor, &mut choosing_match, &mut input);
                     }
                     cursor.insert_at_cursor(&mut input, c);
                     complete.update_input(input.clone());
-                    // TODO: cursor placement
-                    cout.execute(MoveRight(1))?;
                 }
                 _ => {}
             },
             _ => {}
         }
+    }
+}
+
+fn accept_match(
+    complete: &mut AutoComplete,
+    cursor: &mut crate::cursor::Cursor,
+    choosing_match: &mut bool,
+    input: &mut String,
+) {
+    match complete.accept_selected_match() {
+        Ok(_) => {
+            *choosing_match = false;
+            *input = complete.get_input();
+            cursor.reset();
+        }
+        _ => {}
     }
 }
 
@@ -173,6 +174,16 @@ pub fn calc_scroll_amount(items: &Vec<String>, item_width: usize, spacing: usize
     };
 }
 
+pub fn update_cursor_pos(
+    cout: &mut std::io::Stdout,
+    cursor: &crate::cursor::Cursor,
+) -> std::io::Result<()> {
+    if cursor.offset > 0 {
+        cout.execute(cursor::MoveLeft(cursor.offset as u16))?;
+    }
+    return Ok(());
+}
+
 pub fn display_path_content(
     cout: &mut std::io::Stdout,
     choosing_match: bool,
@@ -182,7 +193,6 @@ pub fn display_path_content(
 ) -> std::io::Result<()> {
     let match_item_width = 30;
     let item_spacing = 2;
-    cout.execute(SavePosition)?;
     cout.execute(cursor::MoveToColumn(0))?;
     cout.execute(crossterm::terminal::Clear(
         crossterm::terminal::ClearType::CurrentLine,
@@ -194,7 +204,6 @@ pub fn display_path_content(
             write!(cout, " > {} {}", input_beg, input)?;
         }
 
-        cout.execute(RestorePosition)?;
         let matches = complete.get_matches();
         let scroll = calc_scroll_amount(&matches, match_item_width, item_spacing);
         if scroll > 0 {
@@ -215,7 +224,6 @@ pub fn display_path_content(
             crossterm::terminal::ClearType::FromCursorDown,
         ))?;
         write!(cout, " > {} {}", input_beg, input)?;
-        cout.execute(RestorePosition)?;
     }
     cout.flush()?;
     return Ok(());
