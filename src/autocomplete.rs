@@ -99,6 +99,20 @@ impl AutoComplete {
         }
     }
 
+    pub fn select_previous(&mut self) {
+        if self.matches.is_empty() {
+            self.selected_match = None;
+        } else {
+            self.selected_match = Some(self.selected_match.map_or(self.matches.len() - 1, |i| {
+                if i == 0 {
+                    self.matches.len() - 1
+                } else {
+                    i - 1
+                }
+            }));
+        }
+    }
+
     fn update_matches(&mut self) {
         self.clear_matches();
         let (dir, partial) = AutoComplete::split_input(&self.input);

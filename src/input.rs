@@ -108,21 +108,22 @@ pub fn ask_path(prompt: String, input_beg: &String) -> std::io::Result<(bool, St
                         complete.update_input(input.clone());
                     }
                 }
-                KeyCode::Tab => {
-                    match complete.complete() {
-                        Some(true) => {
-                            choosing_match = false;
-                            input = complete.get_input();
-                            cursor.reset();
-                        }
-                        Some(false) => {
-                            //
-                            choosing_match = true;
-                        }
-                        _ => {
-                            //
-                            choosing_match = false;
-                        }
+                KeyCode::Tab => match complete.complete() {
+                    Some(true) => {
+                        choosing_match = false;
+                        input = complete.get_input();
+                        cursor.reset();
+                    }
+                    Some(false) => {
+                        choosing_match = true;
+                    }
+                    _ => {
+                        choosing_match = false;
+                    }
+                },
+                KeyCode::BackTab => {
+                    if choosing_match {
+                        complete.select_previous();
                     }
                 }
                 KeyCode::Char(c) => {
@@ -145,13 +146,10 @@ fn accept_match(
     choosing_match: &mut bool,
     input: &mut String,
 ) {
-    match complete.accept_selected_match() {
-        Ok(_) => {
-            *choosing_match = false;
-            *input = complete.get_input();
-            cursor.reset();
-        }
-        _ => {}
+    if let Ok(_) = complete.accept_selected_match() {
+        *choosing_match = false;
+        *input = complete.get_input();
+        cursor.reset();
     }
 }
 
@@ -236,7 +234,7 @@ pub fn display_items(
     item_width: usize,
     spacing: usize,
 ) -> std::io::Result<()> {
-    let (term_width, term_height) = {
+    let (term_width, _term_height) = {
         let (w, h) = crossterm::terminal::size()?;
         (w as usize, h as usize)
     };
