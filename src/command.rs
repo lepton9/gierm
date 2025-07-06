@@ -1,4 +1,4 @@
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 pub enum CmdType {
     CLONE,
@@ -68,17 +68,24 @@ impl Cmd {
         return cmd_str;
     }
 
-    pub fn exec(&self) -> Result<String, (CmdError, String)> {
+    pub fn exec(&self, capture_output: bool) -> Result<String, (CmdError, String)> {
         let mut command = Command::new(self.cmd.clone());
         self.args.iter().for_each(|arg| {
             command.arg(arg);
         });
+        if !capture_output {
+            command.stdout(Stdio::inherit()).stderr(Stdio::inherit());
+        }
         match command.output() {
             Ok(output) => {
                 let stdout = String::from_utf8_lossy(&output.stdout).to_string();
                 let stderr = String::from_utf8_lossy(&output.stderr).to_string();
                 if output.status.success() {
-                    Ok(stdout)
+                    if stdout.is_empty() {
+                        Ok(stderr)
+                    } else {
+                        Ok(stdout)
+                    }
                 } else {
                     Err((CmdError::CmdExecError, stderr))
                 }

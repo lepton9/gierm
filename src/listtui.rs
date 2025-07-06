@@ -360,13 +360,9 @@ pub async fn run_list_selector(
         match input_res {
             Ok((true, input)) => {
                 command.push_arg(input.trim().to_string());
-                match command.exec() {
-                    Ok(out) => {
-                        println!("{}", out);
-                    }
-                    Err((e, out)) => {
-                        println!("Error: {}", out);
-                    }
+                match command.exec(false) {
+                    Ok(_) => {}
+                    Err(_e) => {}
                 }
             }
             _ => {}
