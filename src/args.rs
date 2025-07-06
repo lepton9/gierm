@@ -1,14 +1,3 @@
-pub enum Command {
-    CLONE,
-}
-
-pub fn command(cmd: &String) -> Option<Command> {
-    return match cmd.as_str() {
-        "clone" => Some(Command::CLONE),
-        _ => None,
-    };
-}
-
 pub enum ArgsError {
     CLATypeError,
     Help,
@@ -41,7 +30,9 @@ pub fn get_cl_args() -> Result<CLArgs, ArgsError> {
             cl_args.command = Some(a.to_string());
             arg_iter.next();
 
-            if command(cl_args.command.as_ref().unwrap_or(&"".to_string())).is_none() {
+            if crate::command::command_type(cl_args.command.as_ref().unwrap_or(&"".to_string()))
+                .is_none()
+            {
                 println!(
                     "{}: '{}' is not a gierm command. See 'gierm --help'.",
                     args[0],

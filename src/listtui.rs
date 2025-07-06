@@ -1,4 +1,5 @@
 use crate::api;
+use crate::command::{Cmd, CmdType};
 use crate::filterlist::FilterList;
 use crate::git::GitUser;
 use crate::input;
@@ -15,33 +16,6 @@ use ratatui::{
 };
 use std::process::Command;
 use Constraint::{Length, Min};
-
-#[derive(Default)]
-struct Cmd {
-    cmd: String,
-    args: Vec<String>,
-}
-
-impl Cmd {
-    fn new(cmd: String, args: Vec<String>) -> Self {
-        Self { cmd, args }
-    }
-
-    fn from_str(cmd_str: String) -> Option<Self> {
-        let mut parts = cmd_str.split(' ');
-        let cmd = parts.next().map(|s| s.to_string());
-        let args: Vec<String> = parts.map(|s| s.to_string()).collect();
-        if let Some(c) = cmd {
-            return Some(Self { cmd: c, args });
-        }
-        return None;
-    }
-
-    fn to_string(&self) -> String {
-        let cmd_str = format!("{} {}", self.cmd, self.args.join(" "));
-        return cmd_str;
-    }
-}
 
 pub enum GiermError {
     NotFoundError,
@@ -63,7 +37,7 @@ struct ListSearchTui {
     git_user: Option<crate::git::GitUser>,
     searched_username: String,
     list: FilterList,
-    command: crate::args::Command,
+    command: crate::command::CmdType,
     mode: ListTuiMode,
     input_mode: InputMode,
     cursor: crate::cursor::Cursor,
@@ -75,7 +49,7 @@ impl ListSearchTui {
         user: crate::git::User,
         git_user: Option<crate::git::GitUser>,
         searched_username: String,
-        command: crate::args::Command,
+        command: crate::command::CmdType,
         list: FilterList,
     ) -> Self {
         Self {
@@ -113,7 +87,7 @@ impl ListSearchTui {
 
     fn get_command(&mut self) -> Option<Cmd> {
         match self.command {
-            crate::args::Command::CLONE => {
+            crate::command::CmdType::CLONE => {
                 if let Some(repo_i) = self.list.state.get_selected_index() {
                     let filtered_list = self.list.get_filtered();
                     let repo_name = filtered_list
@@ -124,12 +98,8 @@ impl ListSearchTui {
                         None => (self.user.git.username.clone(), true),
                     };
                     let url = crate::git::get_clone_url(&user_name, &repo_name, ssh);
-
-                    // let cmd = Command::new("git").arg("clone").arg(url);
-                    let mut args: Vec<String> = Vec::new();
-                    args.push("clone".to_string());
-                    args.push(url);
-                    let cmd = Cmd::new("git".to_string(), args);
+                    let mut cmd = Cmd::new_git_cmd(CmdType::CLONE);
+                    cmd.push_arg(url);
                     return Some(cmd);
                 }
                 return None;
@@ -391,7 +361,7 @@ pub async fn run_list_selector(
     user: crate::git::User,
     username: String,
     filter: String,
-    command: crate::args::Command,
+    command: crate::command::CmdType,
 ) -> Result<(), GiermError> {
     let mut list_tui: ListSearchTui;
     if let Some(git_user) = crate::api::search_gituser(&user, &username).await {
@@ -409,15 +379,13 @@ pub async fn run_list_selector(
     }
 
     let cmd = list_tui.run().await;
-    if let Some(command) = cmd {
+    if let Some(mut command) = cmd {
         let cmd_str = command.to_string();
         let input_res = input::ask_path("Enter file path:".to_string(), &cmd_str);
         match input_res {
             Ok((true, input)) => {
-                if let Ok(out) = exec_command(
-                    Cmd::from_str(format!("{} {}", cmd_str, input.trim()).trim().to_string())
-                        .unwrap_or_default(),
-                ) {
+                command.push_arg(input.trim().to_string());
+                if let Ok(out) = exec_command(command) {
                     println!("{}", out);
                 }
             }

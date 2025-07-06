@@ -4,6 +4,7 @@ use std::io::{prelude::*, BufReader};
 mod api;
 mod args;
 mod autocomplete;
+mod command;
 mod cursor;
 mod filterlist;
 mod git;
@@ -144,7 +145,7 @@ async fn clone(user: git::User, args: &args::CLArgs) {
         user,
         username,
         args.repo.clone().unwrap_or_default(),
-        args::Command::CLONE,
+        command::CmdType::CLONE,
     )
     .await;
 }
@@ -174,8 +175,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     if let Some(cmd) = &args.command {
-        match args::command(cmd) {
-            Some(args::Command::CLONE) => {
+        match command::command_type(cmd) {
+            Some(command::CmdType::CLONE) => {
                 clone(user, &args).await;
                 return Ok(());
             }
