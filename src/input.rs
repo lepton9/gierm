@@ -68,12 +68,10 @@ pub fn ask_path(prompt: String, input_beg: &String) -> std::io::Result<(bool, St
     let mut cout = std::io::stdout();
     writeln!(&mut cout, "{}", prompt)?;
     cout.execute(cursor::MoveToColumn(0))?;
-    cout.execute(crossterm::terminal::Clear(
-        crossterm::terminal::ClearType::FromCursorDown,
-    ))?;
+    clear_below(&mut cout)?;
     write!(&mut cout, " > {} {}", input_beg, input)?;
     cout.flush()?;
-    loop {
+    let ret = loop {
         display_path_content(&mut cout, choosing_match, &complete, input_beg, &input)?;
         if !choosing_match {
             update_cursor_pos(&mut cout, &cursor)?;
@@ -81,9 +79,7 @@ pub fn ask_path(prompt: String, input_beg: &String) -> std::io::Result<(bool, St
         match crossterm::event::read()? {
             Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
                 KeyCode::Esc => {
-                    crossterm::terminal::disable_raw_mode()?;
-                    println!();
-                    return Ok((false, "".to_string()));
+                    break Ok((false, "".to_string()));
                 }
                 KeyCode::Left => {
                     cursor.c_left(input.len());
@@ -98,9 +94,7 @@ pub fn ask_path(prompt: String, input_beg: &String) -> std::io::Result<(bool, St
                         false
                     };
                     if !accepted {
-                        crossterm::terminal::disable_raw_mode()?;
-                        println!();
-                        return Ok((true, input));
+                        break Ok((true, input));
                     }
                 }
                 KeyCode::Backspace => {
@@ -142,7 +136,11 @@ pub fn ask_path(prompt: String, input_beg: &String) -> std::io::Result<(bool, St
             },
             _ => {}
         }
-    }
+    };
+    crossterm::terminal::disable_raw_mode()?;
+    println!();
+    clear_below(&mut cout)?;
+    return ret;
 }
 
 fn accept_match(
@@ -158,6 +156,13 @@ fn accept_match(
         return true;
     }
     return false;
+}
+
+pub fn clear_below(cout: &mut std::io::Stdout) -> std::io::Result<()> {
+    cout.execute(crossterm::terminal::Clear(
+        crossterm::terminal::ClearType::FromCursorDown,
+    ))?;
+    return Ok(());
 }
 
 pub fn calc_scroll_amount(items: &Vec<String>, item_width: usize, spacing: usize) -> usize {
@@ -225,9 +230,7 @@ pub fn display_path_content(
         )?;
         cout.execute(RestorePosition)?;
     } else {
-        cout.execute(crossterm::terminal::Clear(
-            crossterm::terminal::ClearType::FromCursorDown,
-        ))?;
+        clear_below(cout)?;
         write!(cout, " > {} {}", input_beg, input)?;
     }
     cout.flush()?;
@@ -250,9 +253,7 @@ pub fn display_items(
 
     cout.execute(cursor::MoveToColumn(0))?;
     cout.execute(cursor::MoveToNextLine(1))?;
-    cout.execute(crossterm::terminal::Clear(
-        crossterm::terminal::ClearType::FromCursorDown,
-    ))?;
+    clear_below(cout)?;
     for (index, item) in items.iter().enumerate() {
         if current_line_length + total_item_width > term_width {
             cout.execute(cursor::MoveToNextLine(1))?;

@@ -141,7 +141,7 @@ async fn clone(user: git::User, args: &args::CLArgs) {
             true => "".to_string(),
             false => args.username.clone().unwrap_or_default(),
         };
-    let res = listtui::run_list_selector(
+    let _res = listtui::run_list_selector(
         user,
         username,
         args.repo.clone().unwrap_or_default(),
@@ -166,13 +166,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
+    print!("Fetching user...");
+    std::io::stdout().flush().unwrap();
     let user = match login_user().await {
         Some(user) => user,
         None => {
-            println!("Login failed..");
+            println!("\x1b[2K\rLogin failed..");
             return Ok(());
         }
     };
+    print!("\x1b[2K\r");
+    std::io::stdout().flush().unwrap();
 
     if let Some(cmd) = &args.command {
         match command::command_type(cmd) {
